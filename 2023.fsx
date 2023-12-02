@@ -78,10 +78,19 @@ module Day2 =
             BlueCount: int
         }
 
-        type Game = {
-            GameId: int
-            Sets: Set list
-        }
+        module Set =
+            let colourCount colour set =
+                match colour with
+                | Red -> set.RedCount
+                | Green -> set.GreenCount
+                | Blue -> set.BlueCount
+
+        type Game =
+            {
+                GameId: int
+                Sets: Set list
+            }
+            member this.MaxColourCount colour = this.Sets |> List.map (Set.colourCount colour) |> List.max
 
         let solve () =
             let pGameId = pstring "Game " >>. pint32 .>> pstring ": "
@@ -110,11 +119,13 @@ module Day2 =
                 | Failure (error, _, _) ->
                     failwith $"Failed to parse line (%s{error}): %s{line}"
 
-            let game =
-                "Game 1: 2 blue, 3 red; 3 green, 3 blue, 6 red; 4 blue, 6 red; 2 green, 2 blue, 9 red; 2 red, 4 blue"
-                |> parse
-            printfn $"%A{game}"
-
-            ()
+            "./day2input"
+            |> System.IO.File.ReadLines
+            |> Seq.map parse
+            |> Seq.filter (fun game ->
+                game.MaxColourCount Red <= 12 &&
+                game.MaxColourCount Green <= 13 &&
+                game.MaxColourCount Blue <= 14)
+            |> Seq.sumBy (fun game -> game.GameId)
 
 Day2.PartOne.solve ()
