@@ -66,66 +66,73 @@ module Day1 =
 
 module Day2 =
     open FParsec
-    module PartOne =
-        type Colour =
-            | Red
-            | Green
-            | Blue
+    type Colour =
+        | Red
+        | Green
+        | Blue
 
-        type Set = {
-            RedCount: int
-            GreenCount: int
-            BlueCount: int
+    type Set = {
+        RedCount: int
+        GreenCount: int
+        BlueCount: int
+    }
+
+    module Set =
+        let colourCount colour set =
+            match colour with
+            | Red -> set.RedCount
+            | Green -> set.GreenCount
+            | Blue -> set.BlueCount
+
+    type Game =
+        {
+            GameId: int
+            Sets: Set list
         }
+        member this.MaxColourCount colour = this.Sets |> List.map (Set.colourCount colour) |> List.max
+        member this.Power = this.MaxColourCount Red * this.MaxColourCount Green * this.MaxColourCount Blue
 
-        module Set =
-            let colourCount colour set =
-                match colour with
-                | Red -> set.RedCount
-                | Green -> set.GreenCount
-                | Blue -> set.BlueCount
+    let pGameId = pstring "Game " >>. pint32 .>> pstring ": "
+    let pColour = stringReturn "red" Red <|> stringReturn "green" Green <|> stringReturn "blue" Blue
+    let pColourCount = pint32 .>> pstring " " .>>. pColour
+    let pSet = sepBy pColourCount (pstring ", ")
+    let pGame = pGameId .>>. sepBy pSet (pstring "; ")
+    let parse line =
+        match CharParsers.run pGame line with
+        | Success ((gameId, sets), _, _) ->
+            let sets =
+                sets
+                |> List.map (fun colourCounts ->
+                    let count colour =
+                        colourCounts
+                        |> List.tryFind (fun (_, c) -> c = colour)
+                        |> Option.map fst
+                        |> Option.defaultValue 0
+                    {
+                        RedCount = count Red
+                        GreenCount = count Green
+                        BlueCount = count Blue
+                    })
 
-        type Game =
-            {
-                GameId: int
-                Sets: Set list
-            }
-            member this.MaxColourCount colour = this.Sets |> List.map (Set.colourCount colour) |> List.max
+            { GameId = gameId; Sets = sets }
+        | Failure (error, _, _) ->
+            failwith $"Failed to parse line (%s{error}): %s{line}"
 
+    let games =
+        "./day2input"
+        |> System.IO.File.ReadLines
+        |> Seq.map parse
+
+    module PartOne =
         let solve () =
-            let pGameId = pstring "Game " >>. pint32 .>> pstring ": "
-            let pColour = stringReturn "red" Red <|> stringReturn "green" Green <|> stringReturn "blue" Blue
-            let pColourCount = pint32 .>> pstring " " .>>. pColour
-            let pSet = sepBy pColourCount (pstring ", ")
-            let pGame = pGameId .>>. sepBy pSet (pstring "; ")
-            let parse line =
-                match CharParsers.run pGame line with
-                | Success ((gameId, sets), _, _) ->
-                    let sets =
-                        sets
-                        |> List.map (fun colourCounts ->
-                            let count colour =
-                                colourCounts
-                                |> List.tryFind (fun (_, c) -> c = colour)
-                                |> Option.map fst
-                                |> Option.defaultValue 0
-                            {
-                                RedCount = count Red
-                                GreenCount = count Green
-                                BlueCount = count Blue
-                            })
-
-                    { GameId = gameId; Sets = sets }
-                | Failure (error, _, _) ->
-                    failwith $"Failed to parse line (%s{error}): %s{line}"
-
-            "./day2input"
-            |> System.IO.File.ReadLines
-            |> Seq.map parse
+            games
             |> Seq.filter (fun game ->
                 game.MaxColourCount Red <= 12 &&
                 game.MaxColourCount Green <= 13 &&
                 game.MaxColourCount Blue <= 14)
             |> Seq.sumBy (fun game -> game.GameId)
 
-Day2.PartOne.solve ()
+    module PartTwo =
+        let solve () = games |> Seq.sumBy (fun game -> game.Power)
+
+Day2.PartTwo.solve ()
