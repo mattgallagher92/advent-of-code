@@ -62,4 +62,59 @@ module Day1 =
             |> System.IO.File.ReadLines
             |> Seq.sumBy toCalibrationValue
 
-Day1.PartTwo.solve ()
+#r "nuget: FParsec"
+
+module Day2 =
+    open FParsec
+    module PartOne =
+        type Colour =
+            | Red
+            | Green
+            | Blue
+
+        type Set = {
+            RedCount: int
+            GreenCount: int
+            BlueCount: int
+        }
+
+        type Game = {
+            GameId: int
+            Sets: Set list
+        }
+
+        let solve () =
+            let pGameId = pstring "Game " >>. pint32 .>> pstring ": "
+            let pColour = stringReturn "red" Red <|> stringReturn "green" Green <|> stringReturn "blue" Blue
+            let pColourCount = pint32 .>> pstring " " .>>. pColour
+            let pSet = sepBy pColourCount (pstring ", ")
+            let pGame = pGameId .>>. sepBy pSet (pstring "; ")
+            let parse line =
+                match CharParsers.run pGame line with
+                | Success ((gameId, sets), _, _) ->
+                    let sets =
+                        sets
+                        |> List.map (fun colourCounts ->
+                            let count colour =
+                                colourCounts
+                                |> List.tryFind (fun (_, c) -> c = colour)
+                                |> Option.map fst
+                                |> Option.defaultValue 0
+                            {
+                                RedCount = count Red
+                                GreenCount = count Green
+                                BlueCount = count Blue
+                            })
+
+                    { GameId = gameId; Sets = sets }
+                | Failure (error, _, _) ->
+                    failwith $"Failed to parse line (%s{error}): %s{line}"
+
+            let game =
+                "Game 1: 2 blue, 3 red; 3 green, 3 blue, 6 red; 4 blue, 6 red; 2 green, 2 blue, 9 red; 2 red, 4 blue"
+                |> parse
+            printfn $"%A{game}"
+
+            ()
+
+Day2.PartOne.solve ()
