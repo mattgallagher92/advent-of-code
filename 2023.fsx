@@ -134,7 +134,67 @@ module Day2 =
             |> Seq.sumBy (fun game -> game.Power)
             |> fun sumOfPowers -> printfn $"Sum of powers is %i{sumOfPowers}"
 
+module Day3 =
+    module PartOne =
+        let solve lines =
+            let matchingLocations predicate =
+                lines
+                |> Seq.indexed
+                |> Seq.collect (fun (i, line) ->
+                    line
+                    |> Seq.indexed
+                    |> Seq.filter (snd >> predicate)
+                    |> Seq.map (fun (j, _) -> i, j))
+
+            let numbersWithLocations =
+                matchingLocations Char.IsDigit
+                |> Seq.fold
+                    // TODO: rename symbols
+                    (fun (numbersStrings, (lastI, lastJ)) (i,j) ->
+                        let numberStrings =
+                            let digit = lines |> Seq.item i |> Seq.item j
+                            if i = lastI && j = lastJ + 1 then
+                                let numberSoFar, previousNumbers =
+                                    match numbersStrings with
+                                    | [] -> [], []
+                                    | soFar :: previous -> soFar, previous
+                                ((digit, (i,j)) :: numberSoFar) :: previousNumbers
+                            else
+                                [ (digit, (i,j)) ] :: numbersStrings
+                        numberStrings, (i,j)
+                    )
+                    ([], (-1, 0))
+                |> fst
+                |> List.map (
+                    List.rev
+                    >> List.unzip
+                    >> (fun (digits, locations) -> digits |> List.toArray |> Int32.Parse, locations)
+                )
+                |> List.rev
+
+            let partNumbers =
+                let locationsAdjacentToSymbols =
+                    matchingLocations (fun c -> Char.IsSymbol c || Char.IsPunctuation c && c <> '.')
+                    |> Seq.collect (fun (i, j) -> seq {
+                        (i - 1, j - 1); (i - 1, j); (i - 1, j + 1)
+                        (i, j - 1);                 (i, j + 1)
+                        (i + 1, j - 1); (i + 1, j); (i + 1, j + 1)
+                    })
+                    |> Set
+
+                let isAdjacentToSymbol (_, locations) =
+                    Set locations
+                    |> Set.intersect locationsAdjacentToSymbols
+                    |> Set.isEmpty
+                    |> not
+
+                numbersWithLocations
+                |> List.filter isAdjacentToSymbol
+                |> List.map fst
+
+            List.sum partNumbers
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day2input"
-|> System.IO.File.ReadLines
-|> Day2.PartTwo.solve
+"./day3input"
+|> System.IO.File.ReadAllLines
+|> Day3.PartOne.solve
