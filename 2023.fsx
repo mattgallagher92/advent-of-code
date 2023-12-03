@@ -2,19 +2,18 @@ open System
 
 module Day1 =
     module PartOne =
-        let solve () =
+        let solve lines =
             let toCalibrationValue line =
                 line
                 |> String.filter Char.IsDigit
                 |> fun cs -> Int32.Parse $"%c{Seq.head cs}%c{Seq.last cs}"
 
-            // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-            "./day1input"
-            |> System.IO.File.ReadLines
+            lines
             |> Seq.sumBy toCalibrationValue
+            |> fun totalCalibration -> printfn $"totalCalibration is %i{totalCalibration}"
 
     module PartTwo =
-        let solve () =
+        let solve lines =
             let toCalibrationValue (line: string) =
                 let digitRepresentations =
                     [
@@ -57,10 +56,9 @@ module Day1 =
 
                 10 * firstDigit + lastDigit
 
-            // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-            "./day1input"
-            |> System.IO.File.ReadLines
+            lines
             |> Seq.sumBy toCalibrationValue
+            |> fun totalCalibration -> printfn $"totalCalibration is %i{totalCalibration}"
 
 #r "nuget: FParsec"
 
@@ -118,21 +116,25 @@ module Day2 =
         | Failure (error, _, _) ->
             failwith $"Failed to parse line (%s{error}): %s{line}"
 
-    let games =
-        "./day2input"
-        |> System.IO.File.ReadLines
-        |> Seq.map parse
-
     module PartOne =
-        let solve () =
-            games
+        let solve lines =
+            lines
+            |> Seq.map parse
             |> Seq.filter (fun game ->
                 game.MaxColourCount Red <= 12 &&
                 game.MaxColourCount Green <= 13 &&
                 game.MaxColourCount Blue <= 14)
             |> Seq.sumBy (fun game -> game.GameId)
+            |> fun sumOfGameIds -> printfn $"Sum of game IDs: %i{sumOfGameIds}"
 
     module PartTwo =
-        let solve () = games |> Seq.sumBy (fun game -> game.Power)
+        let solve lines =
+            lines
+            |> Seq.map parse
+            |> Seq.sumBy (fun game -> game.Power)
+            |> fun sumOfPowers -> printfn $"Sum of powers is %i{sumOfPowers}"
 
-Day2.PartTwo.solve ()
+// FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
+"./day2input"
+|> System.IO.File.ReadLines
+|> Day2.PartTwo.solve
