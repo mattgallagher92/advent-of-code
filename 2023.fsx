@@ -285,16 +285,69 @@ module Day4 =
                 contributions.Add(card.Number, contribution)
 
                 contribution)
+module Day5 =
+    open FParsec
+
+    module PartOne =
+        type Range = {
+            DestinationRangeStart: int
+            SourceRangeStart: int
+            RangeLength: int
+        }
+
+        type MapHeader = {
+            SourceCategory: string
+            DestinationCategory: string
+        }
+
+        type Map = {
+            Header: MapHeader
+            Ranges: Range list
+        }
+
+        type Almanac = {
+            Seeds: int list
+            Maps: Map list
+        }
+
+        let pSpace = pchar ' '
+
+        let pSeeds = pstring "seeds:" >>. many (pSpace >>. pint32)
+
+        let pMapHeader =
+            pipe2
+                (many1 letter .>> pstring "-to-")
+                (many1 letter .>> pSpace .>> pstring "map:")
+                (fun letters letters' -> {
+                    SourceCategory = String(letters |> List.toArray)
+                    DestinationCategory = String(letters' |> List.toArray)
+                })
+
+        let pRange =
+            pipe3 (pint32 .>> pSpace) (pint32 .>> pSpace) pint32 (fun i j k -> {
+                DestinationRangeStart = i
+                SourceRangeStart = j
+                RangeLength = k
+            })
+
+        let pMap =
+            pipe2
+                pMapHeader
+                (many (spaces >>? pRange))
+                (fun header ranges -> { Header = header; Ranges = ranges })
+
+        let pFile = pipe2 pSeeds (many (spaces1 >>? pMap)) (fun seeds maps -> { Seeds = seeds; Maps = maps })
+
+        let solve filePath =
+            let almanac =
+                match runParserOnFile pFile () filePath Text.Encoding.UTF8 with
+                | Success (almanac, _, _) -> almanac
+                | Failure (msg, _, _) -> failwith msg
+
+            printfn $"%A{almanac}"
+
+            ()
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day4input"
-|> System.IO.File.ReadAllLines
-// [
-//     "Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53"
-//     "Card 2: 13 32 20 16 61 | 61 30 68 82 17 32 24 19"
-//     "Card 3:  1 21 53 59 44 | 69 82 63 72 16 21 14  1"
-//     "Card 4: 41 92 73 84 69 | 59 84 76 51 58  5 54 83"
-//     "Card 5: 87 83 26 28 32 | 88 30 70 12 93 22 82 36"
-//     "Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11"
-// ]
-|> Day4.PartTwo.solve
+"./day5input"
+|> Day5.PartOne.solve
