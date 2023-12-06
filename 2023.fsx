@@ -290,9 +290,9 @@ module Day5 =
 
     module PartOne =
         type Range = {
-            DestinationRangeStart: int
-            SourceRangeStart: int
-            RangeLength: int
+            DestinationRangeStart: int64
+            SourceRangeStart: int64
+            RangeLength: int64
         }
 
         type MapHeader = {
@@ -306,13 +306,13 @@ module Day5 =
         }
 
         type Almanac = {
-            Seeds: int list
+            Seeds: int64 list
             Maps: Map list
         }
 
         let pSpace = pchar ' '
 
-        let pSeeds = pstring "seeds:" >>. many (pSpace >>. pint32)
+        let pSeeds = pstring "seeds:" >>. many (pSpace >>. pint64)
 
         let pMapHeader =
             pipe2
@@ -324,7 +324,7 @@ module Day5 =
                 })
 
         let pRange =
-            pipe3 (pint32 .>> pSpace) (pint32 .>> pSpace) pint32 (fun i j k -> {
+            pipe3 (pint64 .>> pSpace) (pint64 .>> pSpace) pint64 (fun i j k -> {
                 DestinationRangeStart = i
                 SourceRangeStart = j
                 RangeLength = k
@@ -344,9 +344,36 @@ module Day5 =
                 | Success (almanac, _, _) -> almanac
                 | Failure (msg, _, _) -> failwith msg
 
-            printfn $"%A{almanac}"
+            let mapsInOrder =
+                List.unfold
+                    (fun sourceCategory ->
+                        almanac.Maps
+                        |> List.tryFind (fun m -> m.Header.SourceCategory = sourceCategory)
+                        |> Option.map (fun map -> map, map.Header.DestinationCategory))
+                    "seed"
 
-            ()
+            let applyMap map (category, x) =
+                if category = map.Header.SourceCategory then
+                    let applicableRange =
+                        map.Ranges
+                        |> List.tryFind (fun range ->
+                            range.SourceRangeStart <= x && x < range.SourceRangeStart + range.RangeLength)
+
+                    let dest = map.Header.DestinationCategory
+                    match applicableRange with
+                    | Some range -> (dest, x + range.DestinationRangeStart - range.SourceRangeStart)
+                    | None -> (dest, x)
+                else
+                    (category, x)
+
+            let applyAllMaps =
+                mapsInOrder
+                |> List.map applyMap
+                |> List.reduce (>>)
+
+            almanac.Seeds
+            |> List.map (fun i -> applyAllMaps ("seed", i))
+            |> List.minBy snd
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day5input"
