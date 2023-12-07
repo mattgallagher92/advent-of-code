@@ -11,6 +11,14 @@ module Util =
                 Seq.replicate exponent base'
                 |> Seq.fold (*) 1
 
+    [<RequireQualifiedAccess>]
+    module Parser =
+        open FParsec
+        let runAndUnwrap f parser line =
+            match CharParsers.run parser line with
+            | Success (x, _, _) -> f x
+            | Failure (error, _, _) -> failwith $"Failed to parse line (%s{error}): %s{line}"
+
 module Day1 =
     module PartOne =
         let solve lines =
@@ -375,6 +383,33 @@ module Day5 =
             |> List.map (fun i -> applyAllMaps ("seed", i))
             |> List.minBy snd
 
+module Day6 =
+    open FParsec
+
+    module PartOne =
+        let solve (lines: string array) =
+            let numberOfChargeTimesThatExceedRecordDistance (timeAllowed, recordDistance) =
+                // If charge time is c and time allowed is t, then the distance travelled is c(t-c). It beats the record
+                // distance r if c(t-c) > r. Expressed another way: c^2 - tc + r < 0; or (c - t/2)^2 < (t^2)/4 - r.
+                // From this expression it can be seen that for any value of c which satisfies this inequality, a
+                // different value of c which is at least as close to t/2 as c will also satisfy the inequality. Thus,
+                // if we find the lowest positive integer value of c for which the inequality holds, c' (for which
+                // c' - t/2 will be negative), c' + 2 * (t/2 - c') = t - c' will be the largest positive integer value
+                // of c for which the inequality holds. There are therefore (t - c') - c' + 1 = t - 2c' + 1
+                // possibilities for c satisfying the inequality.
+                Seq.init timeAllowed (fun i -> i * (timeAllowed - i) - recordDistance)
+                |> Seq.findIndex (fun d -> d > 0)
+                |> fun c -> timeAllowed - 2 * c + 1
+
+            let times = lines.[0] |> Parser.runAndUnwrap id (pstring "Time:" >>. many (spaces1 >>. pint32))
+            let distances = lines.[1] |> Parser.runAndUnwrap id (pstring "Distance:" >>. many (spaces1 >>. pint32))
+
+            (times, distances)
+            ||> List.zip
+            |> List.map numberOfChargeTimesThatExceedRecordDistance
+            |> List.reduce (*)
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day5input"
-|> Day5.PartOne.solve
+"./day6input"
+|> System.IO.File.ReadAllLines
+|> Day6.PartOne.solve
