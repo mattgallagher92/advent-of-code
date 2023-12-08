@@ -416,7 +416,81 @@ module Day6 =
 
             numberOfChargeTimesThatExceedRecordDistance (timeAllowed, recordDistance)
 
+module Day7 =
+    module PartOne =
+        type Label =
+            | Two
+            | Three
+            | Four
+            | Five
+            | Six
+            | Seven
+            | Eight
+            | Nine
+            | Ten
+            | Jack
+            | Queen
+            | King
+            | Ace
+
+        type Type' =
+            | HighCard
+            | OnePair
+            | TwoPair
+            | ThreeOfAKind
+            | FullHouse
+            | FourOfAKind
+            | FiveOfAKind
+
+        let classify (label1, label2, label3, label4, label5) =
+            let labels = [ label1; label2; label3; label4; label5 ]
+            let labelCounts = labels |> List.map (fun label -> labels |> List.filter ((=) label) |> List.length)
+            let hasOfAKind i = labelCounts |> List.contains i
+            let numberOfPairs = labelCounts |> List.filter ((=) 2) |> List.length |> fun i -> i / 2
+            match hasOfAKind 5, hasOfAKind 4, hasOfAKind 3, numberOfPairs with
+            | true, _, _, _ -> FiveOfAKind
+            | false, true, _, _ -> FourOfAKind
+            | false, false, true, 1  -> FullHouse
+            | false, false, true, 0 -> ThreeOfAKind
+            | false, false, false, 2 -> TwoPair
+            | false, false, false, 1 -> OnePair
+            | false, false, false, 0 -> HighCard
+            | _, _, _, _ -> failwith $"Invalid labels %A{labels}"
+
+        let parse (line: string) =
+            let parts = line.Split(' ')
+            let hand =
+                let labels = parts.[0]
+                let parseLabel i =
+                    labels
+                    |> Seq.item i
+                    |> function
+                        | '2' -> Two
+                        | '3' -> Three
+                        | '4' -> Four
+                        | '5' -> Five
+                        | '6' -> Six
+                        | '7' -> Seven
+                        | '8' -> Eight
+                        | '9' -> Nine
+                        | 'T' -> Ten
+                        | 'J' -> Jack
+                        | 'Q' -> Queen
+                        | 'K' -> King
+                        | 'A' -> Ace
+                        | c -> failwith $"Invalid label char '%c{c}'"
+                parseLabel 0, parseLabel 1, parseLabel 2, parseLabel 3, parseLabel 4
+            let bid = parts.[1] |> Int32.Parse
+            hand, bid
+
+        let solve lines =
+            lines
+            |> Array.map parse
+            |> Array.sortBy (fun (hand, _) -> classify hand, hand)
+            |> Array.mapi (fun i (_, bid) -> bid * (i + 1))
+            |> Array.sum
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day6input"
+"./day7input"
 |> System.IO.File.ReadAllLines
-|> Day6.PartTwo.solve
+|> Day7.PartOne.solve
