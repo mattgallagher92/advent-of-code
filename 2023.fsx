@@ -547,7 +547,58 @@ module Day7 =
 
         let solve = solve classify rank
 
+module Day8 =
+
+    module PartOne =
+
+        type Direction =
+            | Left
+            | Right
+
+        type Node = {
+            Label: char * char * char
+            LeftLabel: char * char * char
+            RightLabel: char * char * char
+        }
+
+        let solve (lines: string array) =
+
+            let directions =
+                lines
+                |> Array.item 0
+                |> Seq.map (function
+                    | 'L' -> Left
+                    | 'R' -> Right
+                    | c -> failwith $"Invalid direction $c{c}")
+                |> Seq.toArray
+
+            let nodes =
+                lines
+                |> Seq.skip 2
+                |> Seq.map (fun line ->
+                    match line |> Seq.toList with
+                    | c1 :: c2 :: c3 :: ' ' :: '=' :: ' ' :: '(' :: l1 :: l2 :: l3 :: ',' :: ' ' :: r1 :: r2 :: r3 :: [ ')' ] ->
+                        {
+                            Label = c1, c2, c3
+                            LeftLabel = l1, l2, l3
+                            RightLabel = r1, r2, r3
+                        }
+                    | _ -> failwith $"Invalid line: %s{line}")
+
+            let steps =
+                let lookup = nodes |> Seq.map (fun n -> n.Label, n) |> dict
+                let direction i = Array.item (i % directions.Length) directions
+                Array.unfold
+                    (fun (i, node) ->
+                        match node.Label, direction i with
+                        | ('Z', 'Z', 'Z'), _ -> None
+                        | _, Left -> let n = lookup.Item node.LeftLabel in Some (n, (i + 1, n))
+                        | _, Right -> let n = lookup.Item node.RightLabel in Some (n, (i + 1, n)))
+                    (0, lookup.Item ('A', 'A', 'A'))
+
+            steps.Length
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day7input"
+"./day8input"
 |> System.IO.File.ReadAllLines
-|> Day7.PartTwo.solve
+|> Day8.PartOne.solve
