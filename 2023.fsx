@@ -549,41 +549,46 @@ module Day7 =
 
 module Day8 =
 
+    type Direction =
+        | Left
+        | Right
+
+    type Node = {
+        Label: char * char * char
+        LeftLabel: char * char * char
+        RightLabel: char * char * char
+    }
+
+    let parse lines =
+
+        let directions =
+            lines
+            |> Array.item 0
+            |> Seq.map (function
+                | 'L' -> Left
+                | 'R' -> Right
+                | c -> failwith $"Invalid direction $c{c}")
+
+        let nodes =
+            lines
+            |> Seq.skip 2
+            |> Seq.map (fun line ->
+                match line |> Seq.toList with
+                | c1 :: c2 :: c3 :: ' ' :: '=' :: ' ' :: '(' :: l1 :: l2 :: l3 :: ',' :: ' ' :: r1 :: r2 :: r3 :: [ ')' ] ->
+                    {
+                        Label = c1, c2, c3
+                        LeftLabel = l1, l2, l3
+                        RightLabel = r1, r2, r3
+                    }
+                | _ -> failwith $"Invalid line: %s{line}")
+
+        directions |> Seq.toArray, nodes |> Seq.toArray
+
     module PartOne =
 
-        type Direction =
-            | Left
-            | Right
+        let solve lines =
 
-        type Node = {
-            Label: char * char * char
-            LeftLabel: char * char * char
-            RightLabel: char * char * char
-        }
-
-        let solve (lines: string array) =
-
-            let directions =
-                lines
-                |> Array.item 0
-                |> Seq.map (function
-                    | 'L' -> Left
-                    | 'R' -> Right
-                    | c -> failwith $"Invalid direction $c{c}")
-                |> Seq.toArray
-
-            let nodes =
-                lines
-                |> Seq.skip 2
-                |> Seq.map (fun line ->
-                    match line |> Seq.toList with
-                    | c1 :: c2 :: c3 :: ' ' :: '=' :: ' ' :: '(' :: l1 :: l2 :: l3 :: ',' :: ' ' :: r1 :: r2 :: r3 :: [ ')' ] ->
-                        {
-                            Label = c1, c2, c3
-                            LeftLabel = l1, l2, l3
-                            RightLabel = r1, r2, r3
-                        }
-                    | _ -> failwith $"Invalid line: %s{line}")
+            let directions, nodes = parse lines
 
             let steps =
                 let lookup = nodes |> Seq.map (fun n -> n.Label, n) |> dict
@@ -598,7 +603,33 @@ module Day8 =
 
             steps.Length
 
+    module PartTwo =
+
+        let solve lines =
+
+            let directions, nodes = parse lines
+
+            let steps =
+                let lookup = nodes |> Seq.map (fun n -> n.Label, n) |> dict
+                let direction i = Array.item (i % directions.Length) directions
+                let isStartNode n = match n.Label with _, _, 'A' -> true | _ -> false
+                let isEndNode n = match n.Label with _, _, 'Z' -> true | _ -> false
+                Array.unfold
+                    (fun (i, nodes) ->
+                        match nodes |> Array.forall isEndNode, direction i with
+                        | true, _ ->
+                            None
+                        | false, Left ->
+                            let ns = nodes |> Array.map (fun n -> lookup.Item n.LeftLabel)
+                            Some (ns, (i + 1, ns))
+                        | false, Right ->
+                            let ns = nodes |> Array.map (fun n -> lookup.Item n.RightLabel)
+                            Some (ns, (i + 1, ns)))
+                    (0, (nodes |> Array.filter isStartNode))
+
+            steps.Length
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day8input"
 |> System.IO.File.ReadAllLines
-|> Day8.PartOne.solve
+|> Day8.PartTwo.solve
