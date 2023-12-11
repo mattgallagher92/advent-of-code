@@ -1,7 +1,10 @@
+#r "nuget: FParsec"
+
 open System
 
 [<AutoOpen>]
 module Util =
+
     [<RequireQualifiedAccess>]
     module Math =
         let integerPower base' exponent =
@@ -18,6 +21,10 @@ module Util =
             match CharParsers.run parser line with
             | Success (x, _, _) -> f x
             | Failure (error, _, _) -> failwith $"Failed to parse line (%s{error}): %s{line}"
+
+    [<RequireQualifiedAccess>]
+    module Seq =
+        let containsRepeats xs = Seq.length (Seq.distinct xs) < Seq.length xs
 
 module Day1 =
     module PartOne =
@@ -78,8 +85,6 @@ module Day1 =
             lines
             |> Seq.sumBy toCalibrationValue
             |> fun totalCalibration -> printfn $"totalCalibration is %i{totalCalibration}"
-
-#r "nuget: FParsec"
 
 module Day2 =
     open FParsec
@@ -608,26 +613,90 @@ module Day8 =
         let solve lines =
 
             let directions, nodes = parse lines
+            let nodeLookup = nodes |> Seq.map (fun n -> n.Label, n) |> dict
 
-            let steps =
-                let lookup = nodes |> Seq.map (fun n -> n.Label, n) |> dict
-                let direction i = Array.item (i % directions.Length) directions
-                let isStartNode n = match n.Label with _, _, 'A' -> true | _ -> false
-                let isEndNode n = match n.Label with _, _, 'Z' -> true | _ -> false
-                Array.unfold
-                    (fun (i, nodes) ->
-                        match nodes |> Array.forall isEndNode, direction i with
-                        | true, _ ->
-                            None
-                        | false, Left ->
-                            let ns = nodes |> Array.map (fun n -> lookup.Item n.LeftLabel)
-                            Some (ns, (i + 1, ns))
-                        | false, Right ->
-                            let ns = nodes |> Array.map (fun n -> lookup.Item n.RightLabel)
-                            Some (ns, (i + 1, ns)))
-                    (0, (nodes |> Array.filter isStartNode))
+            let startNodes =
+                nodes
+                |> Array.filter (fun n -> match n.Label with _, _, 'A' -> true | _ -> false)
 
-            steps.Length
+            /// For a given node, returns the nodes visited by starting there and following directions in order. Returns
+            /// the last such node separately.
+            let journeyLookup =
+                let journey startNode =
+                    let nodesVisited =
+                        directions
+                        |> Array.scan
+                            (fun n d ->
+                                match d with
+                                | Left -> nodeLookup.Item n.LeftLabel
+                                | Right -> nodeLookup.Item n.RightLabel)
+                            startNode
+                    nodesVisited.[0 .. (nodesVisited.Length - 2)], nodesVisited |> Array.last
+
+                nodes
+                |> Array.map (fun n -> n, journey n)
+                |> dict
+
+            // Keep repeating a journey (following all directions through once) until we end at a node that was the
+            // start of a previous journey. Returns the nodes at the start of those journeys, and the node that is
+            // repeated first.
+            let journeyStartsUntilFirstRepeat startNode =
+
+                let starts =
+                    ([| startNode |], Seq.initInfinite ignore)
+                    ||> Seq.scan
+                        (fun previousStarts ()  ->
+                            if Seq.containsRepeats previousStarts then
+                                previousStarts
+                            else
+                                let previous = previousStarts |> Array.last
+                                let _, nextStart = journeyLookup.Item previous
+                                Array.append previousStarts [| nextStart |])
+                    |> Seq.skipWhile (not << Seq.containsRepeats)
+                    |> Seq.head
+
+                starts |> Array.removeAt (starts.Length - 1), starts |> Array.last
+
+            /// Returns the steps that are before a cycle starts, and a cycle of steps starting immediately afterwards
+            /// that repeats forever.
+            let decomposeFrom startNode =
+
+                let journeyStarts, cycleStart = journeyStartsUntilFirstRepeat startNode
+
+                let cycleStartIndex = journeyStarts |> Array.findIndex ((=) cycleStart)
+                let preCycle =
+                    journeyStarts
+                    |> Array.take cycleStartIndex
+                    |> Array.collect (fun n -> journeyLookup.Item n |> fst)
+                let cycle =
+                    journeyStarts
+                    |> Array.skip cycleStartIndex
+                    |> Array.collect (fun n -> journeyLookup.Item n |> fst)
+
+                preCycle, cycle
+
+            /// The collection nodes of nodes that the paths are on for a given step index.
+            let nodesAtStep =
+                let fs =
+                    startNodes
+                    |> Array.map (fun startNode ->
+                        let preCycle, cycle = decomposeFrom startNode
+                        fun i ->
+                            if i < preCycle.Length then
+                                Array.item i preCycle
+                            else
+                                Array.item ((i - preCycle.Length) % cycle.Length) cycle)
+                fun i ->
+                    fs
+                    |> Array.fold
+                        (fun nodes f -> Array.append nodes [| f i |])
+                        [||]
+
+            let isEndNode n = match n.Label with _, _, 'Z' -> true | _ -> false
+            let allPathsAreAtEndNode stepIndex = nodesAtStep stepIndex |> Array.forall isEndNode
+
+            Seq.initInfinite id
+            |> Seq.find allPathsAreAtEndNode
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day8input"
