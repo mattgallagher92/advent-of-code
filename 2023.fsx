@@ -610,6 +610,18 @@ module Day8 =
 
     module PartTwo =
 
+        type PathSignature = {
+            /// The number of steps before the cycle starts.
+            PreCycleLength: int
+            /// The indices of steps before the cycle that correspond to nodes whose label ends in Z.
+            PreCycleZIndices: int array
+            /// The number of steps in the cycle.
+            CycleLength: int
+            /// The indices, relative to the cycle start, of steps within the cycle that correspond to nodes whose label
+            /// ends in Z.
+            CycleZIndices: int array
+        }
+
         let solve lines =
 
             let directions, nodes = parse lines
@@ -675,28 +687,49 @@ module Day8 =
 
                 preCycle, cycle
 
-            /// The collection nodes of nodes that the paths are on for a given step index.
-            let nodesAtStep =
-                let fs =
-                    startNodes
-                    |> Array.map (fun startNode ->
-                        let preCycle, cycle = decomposeFrom startNode
-                        fun i ->
-                            if i < preCycle.Length then
-                                Array.item i preCycle
-                            else
-                                Array.item ((i - preCycle.Length) % cycle.Length) cycle)
-                fun i ->
-                    fs
-                    |> Array.fold
-                        (fun nodes f -> Array.append nodes [| f i |])
-                        [||]
+            let pathSignatures =
+                let isZNode n = match n.Label with _, _, 'Z' -> true | _ -> false
 
-            let isEndNode n = match n.Label with _, _, 'Z' -> true | _ -> false
-            let allPathsAreAtEndNode stepIndex = nodesAtStep stepIndex |> Array.forall isEndNode
+                startNodes
+                |> Array.map (fun startNode ->
+                    let preCycle, cycle = decomposeFrom startNode
+                    {
+                        PreCycleLength = preCycle.Length
+                        PreCycleZIndices =
+                            preCycle
+                            |> Array.mapi (fun i n -> i, isZNode n)
+                            |> Array.filter snd
+                            |> Array.map fst
+                        CycleLength = cycle.Length
+                        CycleZIndices =
+                            cycle
+                            |> Array.mapi (fun i n -> i, isZNode n)
+                            |> Array.filter snd
+                            |> Array.map fst
+                    })
 
-            Seq.initInfinite id
-            |> Seq.find allPathsAreAtEndNode
+            let zIndexSequences =
+                pathSignatures
+                |> Array.map (fun pSig -> seq {
+                    yield! pSig.PreCycleZIndices
+                    let cycleStartIndices = Seq.initInfinite (fun i -> pSig.PreCycleLength + i * pSig.CycleLength)
+                    yield!
+                        cycleStartIndices
+                        |> Seq.collect (fun cycleStartIndex -> pSig.CycleZIndices |> Seq.map ((+) cycleStartIndex))
+                })
+
+            let allPathsAreAtZNode stepIndex =
+                pathSignatures
+                |> Array.forall (fun pSig ->
+                    if stepIndex < pSig.PreCycleLength then
+                        Array.contains stepIndex pSig.PreCycleZIndices
+                    else
+                        Array.contains ((stepIndex - pSig.PreCycleLength) % pSig.CycleLength) pSig.CycleZIndices
+                )
+
+            zIndexSequences
+            |> Array.head
+            |> Seq.find allPathsAreAtZNode
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day8input"
