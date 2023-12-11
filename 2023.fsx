@@ -7,12 +7,22 @@ module Util =
 
     [<RequireQualifiedAccess>]
     module Math =
+
         let integerPower base' exponent =
             if exponent < 0 then
                 invalidArg (nameof(exponent)) $"exponent must be at least 0; given %i{exponent}"
             else
                 Seq.replicate exponent base'
                 |> Seq.fold (*) 1
+
+        /// Returns the greatest common divisor of a and b.
+        let gcd a b =
+            // Implements Euclid's algorithm.
+            let rec inner a b = if b = 0UL then a else inner b (a % b)
+            inner a b
+
+        /// Returns the least common multiple of a and b.
+        let lcm a b = (a * b) / gcd a b
 
     [<RequireQualifiedAccess>]
     module Parser =
@@ -708,28 +718,21 @@ module Day8 =
                             |> Array.map fst
                     })
 
-            let zIndexSequences =
-                pathSignatures
-                |> Array.map (fun pSig -> seq {
-                    yield! pSig.PreCycleZIndices
-                    let cycleStartIndices = Seq.initInfinite (fun i -> pSig.PreCycleLength + i * pSig.CycleLength)
-                    yield!
-                        cycleStartIndices
-                        |> Seq.collect (fun cycleStartIndex -> pSig.CycleZIndices |> Seq.map ((+) cycleStartIndex))
-                })
-
-            let allPathsAreAtZNode stepIndex =
-                pathSignatures
-                |> Array.forall (fun pSig ->
-                    if stepIndex < pSig.PreCycleLength then
-                        Array.contains stepIndex pSig.PreCycleZIndices
-                    else
-                        Array.contains ((stepIndex - pSig.PreCycleLength) % pSig.CycleLength) pSig.CycleZIndices
-                )
-
-            zIndexSequences
-            |> Array.head
-            |> Seq.find allPathsAreAtZNode
+            // TODO: implement in generic way.
+            // This is a hack that makes use of some observations I've made about the particular input I have. It's not
+            // sufficiently generic to handle every possible input of this type.
+            //
+            // The observations that I've made use of are:
+            // - There are no pre-cycle z-indices
+            // - The pre-cycles are all the same length
+            // - There is only one cycle z-index, which is pre-cycle length away from the end of the cycle.
+            //
+            // As a result, any step index that is a z-index of a path must be divisible by that path signature's cycle
+            // length. So a step index that is a z-index of all paths is divisible by all cycle lengths. The first such
+            // step index is the least common multiple of the cycle lengths.
+            pathSignatures
+            |> Array.map (fun i -> i.CycleLength |> Convert.ToUInt64)
+            |> Array.reduce Math.lcm
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day8input"
