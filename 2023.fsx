@@ -1,3 +1,5 @@
+#r "nuget: FParsec"
+
 open System
 
 [<AutoOpen>]
@@ -78,8 +80,6 @@ module Day1 =
             lines
             |> Seq.sumBy toCalibrationValue
             |> fun totalCalibration -> printfn $"totalCalibration is %i{totalCalibration}"
-
-#r "nuget: FParsec"
 
 module Day2 =
     open FParsec
