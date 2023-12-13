@@ -915,7 +915,23 @@ module Day10 =
             |> Seq.last
             |> fst
 
+    module PartTwo =
+
+        let solve lines =
+
+            // Consider the gaps between tiles.
+            // Consider the "gaps" between tiles - these would correspond to sides of the squares the tiles sit on.
+            // Filter to gaps unoccupied by connected main-loop pipes.
+            // Find all unoccupied gaps which can be reached, via a path of adjacent unoccupied gaps, from unoccupied
+            // gaps at the edge of the sketch. "Adjacent" means horizontally or vertically or diagonally.
+            // This could be done by starting with the unoccupied gaps at the edge of sketch, and iteratively adding all
+            // adjacent unoccupied gaps until no new gaps are added.
+            // Every non-main-loop tile with such a gap next to it is outside the loop.
+            // The remaining non-main-loop tiles are those inside the loop.
+
+            ()
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day10input"
 |> System.IO.File.ReadAllLines
-|> Day10.PartOne.solve
+|> Day10.PartTwo.solve
