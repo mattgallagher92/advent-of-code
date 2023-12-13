@@ -834,6 +834,7 @@ module Day10 =
 
     module PartOne =
 
+        // TODO: investigate ways to speed up (takes about 5 seconds).
         let solve lines =
 
             let startCoords, tileLookup =
@@ -878,34 +879,29 @@ module Day10 =
 
                 Seq.initInfinite id
                 |> Seq.scan
-                    (fun coordsByDistance _ ->
-                        coordsByDistance
-                        |> Option.bind (fun coordsByDistance ->
-                            let measuredCoords = coordsByDistance |> Map.values |> Seq.collect id |> Set
-                            let maxDistance = coordsByDistance |> Map.keys |> Seq.max
+                    (fun param _ ->
+                        param
+                        |> Option.bind (fun (lowerDistanceCoords, maxDistanceSoFarCoords) ->
+                            let allCoordsSoFar = Array.append lowerDistanceCoords maxDistanceSoFarCoords
 
-                            let coordinatesAtNextDistance =
-                                coordsByDistance
-                                |> Map.find maxDistance
+                            let coordsAtNextDistance =
+                                maxDistanceSoFarCoords
                                 |> Array.collect connectedCoords
-                                |> Array.except measuredCoords
+                                |> Array.except allCoordsSoFar
 
-                            if coordinatesAtNextDistance |> Array.isEmpty then
+                            if coordsAtNextDistance |> Array.isEmpty then
                                 None
                             else
-                                coordsByDistance
-                                |> Map.add (maxDistance + 1) coordinatesAtNextDistance
-                                |> Some
+                                Some (allCoordsSoFar, coordsAtNextDistance)
                         )
                     )
-                    (Some (Map [ (0, [| startCoords |]) ]))
+                    (Some ([||], [| startCoords |]))
                 |> Seq.takeWhile Option.isSome
+                |> Seq.map (fun o -> o.Value |> snd)
+                |> Seq.indexed
                 |> Seq.last
-                |> fun o -> o.Value
 
-            coordsByDistance
-            |> Map.keys
-            |> Seq.max
+            fst coordsByDistance
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day10input"
