@@ -27,6 +27,7 @@ module Util =
     [<RequireQualifiedAccess>]
     module Parser =
         open FParsec
+
         let runAndUnwrap f parser line =
             match CharParsers.run parser line with
             | Success (x, _, _) -> f x
@@ -34,7 +35,15 @@ module Util =
 
     [<RequireQualifiedAccess>]
     module Seq =
+
         let containsRepeats xs = Seq.length (Seq.distinct xs) < Seq.length xs
+
+    type Collections.Generic.IDictionary<'a, 'b> with
+
+        member this.TryGet k =
+            match this.TryGetValue k with
+            | true, v -> Some v
+            | false, _ -> None
 
 module Day1 =
     module PartOne =
@@ -787,7 +796,118 @@ module Day9 =
 
         let solve = solve extrapolate
 
+module Day10 =
+
+    type Direction =
+        | North
+        | South
+        | East
+        | West
+
+    type Tile =
+        | Pipe of Direction * Direction
+        | Ground
+        | StartingPosition
+
+    let pTile =
+        function
+        | '|' -> Pipe (North, South)
+        | '-' -> Pipe (East, West)
+        | 'L' -> Pipe (North, East)
+        | 'J' -> Pipe (North, West)
+        | '7' -> Pipe (South, West)
+        | 'F' -> Pipe (South, East)
+        | '.' -> Ground
+        | 'S' -> StartingPosition
+        | c -> failwith $"Invalid tile char: '%c{c}"
+
+    [<RequireQualifiedAccess>]
+    module Tile =
+
+        let connectedDirections tile =
+            match tile with
+            | Pipe (a, b) -> [| a; b |]
+            | Ground
+            | StartingPosition -> [||]
+
+        let connects direction tile = tile |> connectedDirections |> Array.contains direction
+
+    module PartOne =
+
+        let solve lines =
+
+            let startCoords, tileLookup =
+                let tiles =
+                    lines
+                    |> Array.mapi (fun i line -> line |> Seq.mapi (fun j c -> (i, j), pTile c) |> Seq.toArray)
+                    |> Array.collect id
+
+                let startCoords = tiles |> Array.find (snd >> (=) StartingPosition) |> fst
+                let lookup = dict tiles
+
+                let startPipe =
+                    let connectedDirections = [
+                        let connects direction coords =
+                            coords |> lookup.TryGet |> Option.map (Tile.connects direction) |> Option.defaultValue false
+
+                        let i, j = startCoords
+
+                        if (i - 1, j) |> connects South then North
+                        if (i + 1, j) |> connects North then South
+                        if (i, j + 1) |> connects West then East
+                        if (i, j - 1) |> connects East then West
+                    ]
+
+                    Pipe (connectedDirections.[0], connectedDirections.[1])
+
+                startCoords, dict (Array.append tiles [| startCoords, startPipe |])
+
+            let coordsByDistance =
+                let connectedCoords (i, j) =
+                    (i, j)
+                    |> tileLookup.TryGet
+                    |> Option.map Tile.connectedDirections
+                    |> Option.defaultValue [||]
+                    |> Array.map (
+                        function
+                        | North -> (i - 1, j)
+                        | South -> (i + 1, j)
+                        | East -> (i, j + 1)
+                        | West -> (i, j - 1)
+                    )
+
+                Seq.initInfinite id
+                |> Seq.scan
+                    (fun coordsByDistance _ ->
+                        coordsByDistance
+                        |> Option.bind (fun coordsByDistance ->
+                            let measuredCoords = coordsByDistance |> Map.values |> Seq.collect id |> Set
+                            let maxDistance = coordsByDistance |> Map.keys |> Seq.max
+
+                            let coordinatesAtNextDistance =
+                                coordsByDistance
+                                |> Map.find maxDistance
+                                |> Array.collect connectedCoords
+                                |> Array.except measuredCoords
+
+                            if coordinatesAtNextDistance |> Array.isEmpty then
+                                None
+                            else
+                                coordsByDistance
+                                |> Map.add (maxDistance + 1) coordinatesAtNextDistance
+                                |> Some
+                        )
+                    )
+                    (Some (Map [ (0, [| startCoords |]) ]))
+                |> Seq.takeWhile Option.isSome
+                |> Seq.last
+                |> fun o -> o.Value
+
+            coordsByDistance
+            |> Map.keys
+            |> Seq.max
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day9input"
+"./day10input"
 |> System.IO.File.ReadAllLines
-|> Day9.PartTwo.solve
+|> Day10.PartOne.solve
