@@ -797,6 +797,7 @@ module Day9 =
         let solve = solve extrapolate
 
 module Day10 =
+    open System.Collections.Generic
 
     type Direction =
         | North
@@ -832,76 +833,87 @@ module Day10 =
 
         let connects direction tile = tile |> connectedDirections |> Array.contains direction
 
+    /// Parses lines into an array of pairs, whose first elements are coordinates and second elements are the contents
+    /// of the tile at those coordinates.
+    let parse lines =
+        lines
+        |> Array.mapi (fun i line -> line |> Seq.mapi (fun j c -> (i, j), pTile c) |> Seq.toArray)
+        |> Array.collect id
+
+    /// Returns the coordinates of the starting tile, and a dictionary from coordinates to the tile contents. The value
+    /// corresponding to the starting coordinates is the pipe that is calculated to be present there, not
+    /// StartingPosition.
+    let calculateStartCoordsAndTileLookup tiles =
+        let startCoords = tiles |> Array.find (snd >> (=) StartingPosition) |> fst
+        let lookup = dict tiles
+
+        let startPipe =
+            let connectedDirections = [
+                let connects direction coords =
+                    coords |> lookup.TryGet |> Option.map (Tile.connects direction) |> Option.defaultValue false
+
+                let i, j = startCoords
+
+                if (i - 1, j) |> connects South then North
+                if (i + 1, j) |> connects North then South
+                if (i, j + 1) |> connects West then East
+                if (i, j - 1) |> connects East then West
+            ]
+
+            Pipe (connectedDirections.[0], connectedDirections.[1])
+
+        startCoords, dict (Array.append tiles [| startCoords, startPipe |])
+
+    /// Returns a sequence of pairs whose first element represents a distance from the starting position in the main
+    /// loop, and whose second element is an array consisting of the coordinates which correspond to tiles at that
+    /// distance.
+    // TODO: investigate ways to speed up (takes about 5 seconds to find last value matching Some _).
+    let calculateCoordsByDistanceSeq startCoords (tileLookup: IDictionary<int * int, Tile>) =
+
+        let connectedCoords (i, j) =
+            (i, j)
+            |> tileLookup.TryGet
+            |> Option.map Tile.connectedDirections
+            |> Option.defaultValue [||]
+            |> Array.map (
+                function
+                | North -> (i - 1, j)
+                | South -> (i + 1, j)
+                | East -> (i, j + 1)
+                | West -> (i, j - 1)
+            )
+
+        Seq.initInfinite id
+        |> Seq.scan
+            (fun param _ ->
+                param
+                |> Option.bind (fun (lowerDistanceCoords, maxDistanceSoFarCoords) ->
+                    let allCoordsSoFar = Array.append lowerDistanceCoords maxDistanceSoFarCoords
+
+                    let coordsAtNextDistance =
+                        maxDistanceSoFarCoords
+                        |> Array.collect connectedCoords
+                        |> Array.except allCoordsSoFar
+
+                    if coordsAtNextDistance |> Array.isEmpty then
+                        None
+                    else
+                        Some (allCoordsSoFar, coordsAtNextDistance)
+                )
+            )
+            (Some ([||], [| startCoords |]))
+        |> Seq.takeWhile Option.isSome
+        |> Seq.map (fun o -> o.Value |> snd)
+        |> Seq.indexed
+
     module PartOne =
 
-        // TODO: investigate ways to speed up (takes about 5 seconds).
         let solve lines =
-
-            let startCoords, tileLookup =
-                let tiles =
-                    lines
-                    |> Array.mapi (fun i line -> line |> Seq.mapi (fun j c -> (i, j), pTile c) |> Seq.toArray)
-                    |> Array.collect id
-
-                let startCoords = tiles |> Array.find (snd >> (=) StartingPosition) |> fst
-                let lookup = dict tiles
-
-                let startPipe =
-                    let connectedDirections = [
-                        let connects direction coords =
-                            coords |> lookup.TryGet |> Option.map (Tile.connects direction) |> Option.defaultValue false
-
-                        let i, j = startCoords
-
-                        if (i - 1, j) |> connects South then North
-                        if (i + 1, j) |> connects North then South
-                        if (i, j + 1) |> connects West then East
-                        if (i, j - 1) |> connects East then West
-                    ]
-
-                    Pipe (connectedDirections.[0], connectedDirections.[1])
-
-                startCoords, dict (Array.append tiles [| startCoords, startPipe |])
-
-            let coordsByDistance =
-                let connectedCoords (i, j) =
-                    (i, j)
-                    |> tileLookup.TryGet
-                    |> Option.map Tile.connectedDirections
-                    |> Option.defaultValue [||]
-                    |> Array.map (
-                        function
-                        | North -> (i - 1, j)
-                        | South -> (i + 1, j)
-                        | East -> (i, j + 1)
-                        | West -> (i, j - 1)
-                    )
-
-                Seq.initInfinite id
-                |> Seq.scan
-                    (fun param _ ->
-                        param
-                        |> Option.bind (fun (lowerDistanceCoords, maxDistanceSoFarCoords) ->
-                            let allCoordsSoFar = Array.append lowerDistanceCoords maxDistanceSoFarCoords
-
-                            let coordsAtNextDistance =
-                                maxDistanceSoFarCoords
-                                |> Array.collect connectedCoords
-                                |> Array.except allCoordsSoFar
-
-                            if coordsAtNextDistance |> Array.isEmpty then
-                                None
-                            else
-                                Some (allCoordsSoFar, coordsAtNextDistance)
-                        )
-                    )
-                    (Some ([||], [| startCoords |]))
-                |> Seq.takeWhile Option.isSome
-                |> Seq.map (fun o -> o.Value |> snd)
-                |> Seq.indexed
-                |> Seq.last
-
-            fst coordsByDistance
+            parse lines
+            |> calculateStartCoordsAndTileLookup
+            ||> calculateCoordsByDistanceSeq
+            |> Seq.last
+            |> fst
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day10input"
