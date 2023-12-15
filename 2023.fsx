@@ -919,15 +919,15 @@ module Day10 =
 
         let solve lines =
 
-            // Consider the gaps between tiles.
-            // Consider the "gaps" between tiles - these would correspond to sides of the squares the tiles sit on.
-            // Filter to gaps unoccupied by connected main-loop pipes.
-            // Find all unoccupied gaps which can be reached, via a path of adjacent unoccupied gaps, from unoccupied
-            // gaps at the edge of the sketch. "Adjacent" means horizontally or vertically or diagonally.
-            // This could be done by starting with the unoccupied gaps at the edge of sketch, and iteratively adding all
-            // adjacent unoccupied gaps until no new gaps are added.
-            // Every non-main-loop tile with such a gap next to it is outside the loop.
-            // The remaining non-main-loop tiles are those inside the loop.
+            // Consider the vertices of the square tiles that make up the grid.
+            // The non-main-loop tiles which are outside the loop are precisely those which have a vertex that can be
+            // reached by a path starting from a vertex on the edge of the grid that traverses along sides that aren't
+            // crossed by the main loop (which is to say that the main loop does not go directly between the two tiles
+            // that share the side).
+            // One possible way to find all such vertices is to start with the vertices at the edge of grid and
+            // iteratively add all adjacent vertices that can be reached without crossing the main loop, until no new
+            // vertices are added.
+            // The non-main-loop tiles without such a vertex are those inside the loop.
 
             ()
 
