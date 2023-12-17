@@ -1011,7 +1011,60 @@ module Day10 =
 
             enclosedTileCoords |> Set.count
 
+module Day11 =
+
+    type Pixel =
+        | EmptySpace
+        | Galaxy
+
+    module Pixel =
+
+        let parse = function '.' -> EmptySpace | '#' -> Galaxy | c -> failwith $"Invalid pixel: %c{c}"
+
+    module PartOne =
+
+        let solve image =
+
+            let universe = image |> Array2D.map Pixel.parse
+
+            let expandedUniverse =
+
+                let rowNumbers = seq { 0 .. (universe |> Array2D.length1) - 1 }
+                let colNumbers = seq { 0 .. (universe |> Array2D.length2) - 1 }
+
+                let isEmpty ps = Seq.forall ((=) EmptySpace) ps
+
+                rowNumbers
+                |> Seq.map (fun i -> colNumbers |> Seq.map (fun j -> Array2D.get universe i j))
+                // Expand rows
+                |> Seq.collect (fun row -> if row |> isEmpty then seq { row; row } else seq { row })
+                // Expand columns
+                |> Seq.transpose
+                |> Seq.collect (fun col -> if col |> isEmpty then seq { col; col } else seq { col })
+                |> Seq.transpose
+                |> array2D
+
+            let galaxyIndices =
+
+                let rowNumbers = seq { 0 .. (expandedUniverse |> Array2D.length1) - 1 }
+                let colNumbers = seq { 0 .. (expandedUniverse |> Array2D.length2) - 1 }
+
+                Seq.allPairs rowNumbers colNumbers
+                |> Seq.filter (fun (i, j) -> Array2D.get expandedUniverse i j = Galaxy)
+                |> Seq.toArray
+
+            let galaxyPairs =
+
+                galaxyIndices
+                |> Seq.mapi (fun i g1 -> galaxyIndices.[ (i+1) .. ] |> Array.map (fun g2 -> g1, g2))
+                |> Seq.collect id
+
+            let shortestPathLength ((i1: int, j1: int), (i2, j2)) = Math.Abs(i2 - i1) + Math.Abs (j2 - j1)
+
+            galaxyPairs |> Seq.sumBy shortestPathLength
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day10input"
+"./day11input"
 |> System.IO.File.ReadAllLines
-|> Day10.PartTwo.solve
+|> array2D
+|> Day11.PartOne.solve
