@@ -1021,50 +1021,62 @@ module Day11 =
 
         let parse = function '.' -> EmptySpace | '#' -> Galaxy | c -> failwith $"Invalid pixel: %c{c}"
 
+    let solve expansionFactor image =
+
+        let universe = image |> Array2D.map Pixel.parse
+
+        let rowNumbers = [| 0 .. (universe |> Array2D.length1) - 1 |]
+        let colNumbers = [| 0 .. (universe |> Array2D.length2) - 1 |]
+
+        let galaxyIndices =
+            Seq.allPairs rowNumbers colNumbers
+            |> Seq.filter (fun (i, j) -> Array2D.get universe i j = Galaxy)
+            |> Seq.toArray
+
+        let galaxyPairs =
+            galaxyIndices
+            |> Seq.mapi (fun i g1 -> galaxyIndices.[ (i+1) .. ] |> Array.map (fun g2 -> g1, g2))
+            |> Seq.collect id
+
+        let emptyRowNumbers =
+            rowNumbers
+            |> Array.filter (fun i -> colNumbers |> Array.forall (fun j -> Array2D.get universe i j = EmptySpace))
+            |> Set
+
+        let emptyColNumbers =
+            colNumbers
+            |> Array.filter (fun j -> rowNumbers |> Array.forall (fun i -> Array2D.get universe i j = EmptySpace))
+            |> Set
+
+        let shortestPathLength ((i1: int, j1: int), (i2, j2)) =
+
+            let crossedEmptyRows =
+                (if i2 > i1 then Set (seq { i1 .. i2 }) else Set (seq { i2 .. i1 }))
+                |> Set.intersect emptyRowNumbers
+                |> Set.count
+                |> int64
+
+            let crossedEmptyCols =
+                (if j2 > j1 then Set (seq { j1 .. j2 }) else Set (seq { j2 .. j1 }))
+                |> Set.intersect emptyColNumbers
+                |> Set.count
+                |> int64
+
+            (Math.Abs(i2 - i1) |> int64)
+            + (Math.Abs (j2 - j1) |> int64)
+            + (expansionFactor - 1L) * (crossedEmptyRows + crossedEmptyCols)
+
+        galaxyPairs |> Seq.sumBy shortestPathLength
+
     module PartOne =
+        let solve = solve 2
 
-        let solve image =
 
-            let universe = image |> Array2D.map Pixel.parse
-
-            let expandedUniverse =
-
-                let rowNumbers = seq { 0 .. (universe |> Array2D.length1) - 1 }
-                let colNumbers = seq { 0 .. (universe |> Array2D.length2) - 1 }
-
-                let isEmpty ps = Seq.forall ((=) EmptySpace) ps
-
-                rowNumbers
-                |> Seq.map (fun i -> colNumbers |> Seq.map (fun j -> Array2D.get universe i j))
-                // Expand rows
-                |> Seq.collect (fun row -> if row |> isEmpty then seq { row; row } else seq { row })
-                // Expand columns
-                |> Seq.transpose
-                |> Seq.collect (fun col -> if col |> isEmpty then seq { col; col } else seq { col })
-                |> Seq.transpose
-                |> array2D
-
-            let galaxyIndices =
-
-                let rowNumbers = seq { 0 .. (expandedUniverse |> Array2D.length1) - 1 }
-                let colNumbers = seq { 0 .. (expandedUniverse |> Array2D.length2) - 1 }
-
-                Seq.allPairs rowNumbers colNumbers
-                |> Seq.filter (fun (i, j) -> Array2D.get expandedUniverse i j = Galaxy)
-                |> Seq.toArray
-
-            let galaxyPairs =
-
-                galaxyIndices
-                |> Seq.mapi (fun i g1 -> galaxyIndices.[ (i+1) .. ] |> Array.map (fun g2 -> g1, g2))
-                |> Seq.collect id
-
-            let shortestPathLength ((i1: int, j1: int), (i2, j2)) = Math.Abs(i2 - i1) + Math.Abs (j2 - j1)
-
-            galaxyPairs |> Seq.sumBy shortestPathLength
+    module PartTwo =
+        let solve = solve 1_000_000L
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day11input"
 |> System.IO.File.ReadAllLines
 |> array2D
-|> Day11.PartOne.solve
+|> Day11.PartTwo.solve
