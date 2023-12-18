@@ -35,8 +35,24 @@ module Util =
 
     [<RequireQualifiedAccess>]
     module Seq =
-
         let containsRepeats xs = Seq.length (Seq.distinct xs) < Seq.length xs
+
+        /// Returns a sequence up to and including the first element of the input sequence that matches the predicate,
+        /// then no more. If there are no matching elements in the input sequence, then all elements will be returned.
+        // Implementation inspired by https://stackoverflow.com/a/12564899
+        // TODO: add tests.
+        let takeUntilFirstMatch predicate (s:seq<_>) =
+            let rec loop (en:System.Collections.Generic.IEnumerator<_>) = seq {
+                if en.MoveNext() then
+                    yield en.Current
+                    if not (predicate en.Current) then
+                        yield! loop en
+            }
+
+            seq {
+                use en = s.GetEnumerator()
+                yield! loop en
+            }
 
     type Collections.Generic.IDictionary<'a, 'b> with
 
@@ -805,6 +821,15 @@ module Day10 =
         | East
         | West
 
+    module Direction =
+
+        let opposite =
+            function
+            | North -> South
+            | South -> North
+            | East -> West
+            | West -> East
+
     type Tile =
         | Pipe of Direction * Direction
         | Ground
@@ -867,46 +892,37 @@ module Day10 =
         startCoords, dict (Array.append tiles [| startCoords, startPipe |])
 
     /// Returns a sequence of pairs whose first element represents a distance from the starting position in the main
-    /// loop, and whose second element is an array consisting of the coordinates which correspond to tiles at that
-    /// distance.
-    // TODO: investigate ways to speed up (takes about 5 seconds to find last value matching Some _).
+    /// loop, and whose second element is the set of the coordinates which correspond to tiles at that distance.
     let calculateCoordsByDistanceSeq startCoords (tileLookup: IDictionary<int * int, Tile>) =
 
-        let connectedCoords (i, j) =
-            (i, j)
-            |> tileLookup.TryGet
-            |> Option.map Tile.exitDirections
-            |> Option.defaultValue [||]
-            |> Array.map (
-                function
-                | North -> (i - 1, j)
-                | South -> (i + 1, j)
-                | East -> (i, j + 1)
-                | West -> (i, j - 1)
-            )
+        let startDirections = tileLookup.Item startCoords |> Tile.exitDirections
 
-        Seq.initInfinite id
-        |> Seq.scan
-            (fun param _ ->
-                param
-                |> Option.bind (fun (lowerDistanceCoords, maxDistanceSoFarCoords) ->
-                    let allCoordsSoFar = Array.append lowerDistanceCoords maxDistanceSoFarCoords
+        let distanceGoingIn startDirection =
 
-                    let coordsAtNextDistance =
-                        maxDistanceSoFarCoords
-                        |> Array.collect connectedCoords
-                        |> Array.except allCoordsSoFar
+            ((startCoords, startDirection), Seq.initInfinite ignore)
+            ||> Seq.scan (fun ((i, j), inDirection) _ ->
+                let outDirection =
+                    tileLookup.Item (i, j)
+                    |> Tile.exitDirections
+                    |> Array.find ((<>) inDirection)
 
-                    if coordsAtNextDistance |> Array.isEmpty then
-                        None
-                    else
-                        Some (allCoordsSoFar, coordsAtNextDistance)
-                )
-            )
-            (Some ([||], [| startCoords |]))
-        |> Seq.takeWhile Option.isSome
-        |> Seq.map (fun o -> o.Value |> snd)
+                let nextCoords =
+                    match outDirection with
+                    | North -> (i - 1, j)
+                    | South -> (i + 1, j)
+                    | East -> (i, j + 1)
+                    | West -> (i, j - 1)
+
+                (nextCoords, outDirection |> Direction.opposite))
+            |> Seq.map fst
+
+        (distanceGoingIn startDirections.[0], distanceGoingIn startDirections.[1])
+        ||> Seq.zip
         |> Seq.indexed
+        // The paths are guaranteed to hit the midpoint of the loop at the same time because the length of the main loop
+        // is even: the number of steps North equals the number of steps South, and likewise for East and West.
+        |> Seq.takeUntilFirstMatch (fun (distance, (cs1, cs2)) -> distance <> 0 && cs1 = cs2)
+        |> Seq.map (fun (distance, (cs1, cs2)) -> distance, Set (seq { cs1; cs2 }))
 
     module PartOne =
 
@@ -935,7 +951,7 @@ module Day10 =
             let mainLoopTileCoords =
                 (startTileCoords, tileLookup)
                 ||> calculateCoordsByDistanceSeq
-                |> Seq.map (snd >> set)
+                |> Seq.map snd
                 |> Set.unionMany
 
             let accessibleAdjacentVertices (i, j) = seq {
