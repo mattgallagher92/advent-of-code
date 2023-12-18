@@ -1091,8 +1091,87 @@ module Day11 =
     module PartTwo =
         let solve = solve 1_000_000L
 
+module Day12 =
+
+    type SpringStatus =
+        | Operational
+        | Damaged
+        | Unknown
+
+    module SpringStatus =
+
+        let parse =
+            function '.' -> Operational | '#' -> Damaged | '?' -> Unknown | c -> failwith $"Invalid status char: %c{c}"
+
+    type RowInfo = {
+        Row: SpringStatus array
+        DamagedGroupSizes: int array
+    }
+
+    module RowInfo =
+
+        let parse (line: string) =
+            let parts = line.Split(' ')
+            {
+                Row = parts.[0] |> Seq.map SpringStatus.parse |> Seq.toArray
+                DamagedGroupSizes = parts.[1].Split(',') |> Array.map int
+            }
+
+        let possibleArrangements info =
+
+            let matchesPattern arrangement =
+                arrangement
+                |> Seq.zip info.Row
+                |> Seq.forall (fun (r, a) -> r = a || r = Unknown)
+
+            (info.DamagedGroupSizes, [ [] ])
+            ||> Array.foldBack (fun groupSize possibleGroupStartIndices ->
+                possibleGroupStartIndices
+                |> List.collect (fun groupStartIndices ->
+
+                    let remainingPattern =
+                        match groupStartIndices with
+                        | [] -> info.Row
+                        // Go up to the first index and leave a space for an operational spring.
+                        | index :: _ -> info.Row.[ 0 .. index - 2 ]
+
+                    let possibleStartIndices =
+                        remainingPattern
+                        |> Array.windowed groupSize
+                        |> Array.indexed
+                        |> Array.filter (fun (_, window) ->
+                            window |> Array.forall (function Operational -> false | Damaged | Unknown -> true))
+                        |> Array.map fst
+                        |> Array.toList
+
+                    possibleStartIndices
+                    |> List.map (fun i -> i :: groupStartIndices)))
+
+            |> Seq.map (fun indices ->
+                let damagedIndices =
+                    info.DamagedGroupSizes
+                    |> Seq.zip indices
+                    |> Seq.collect (fun (startIndex, size) -> seq { startIndex .. startIndex + size - 1})
+                    |> Seq.toArray
+
+                seq {
+                    for i in 0 .. info.Row.Length do
+                        if damagedIndices |> Array.contains i then
+                            Damaged
+                        else
+                            Operational
+                })
+
+            |> Seq.filter matchesPattern
+
+    module PartOne =
+
+        let solve lines =
+            lines
+            |> Array.map (RowInfo.parse >> RowInfo.possibleArrangements >> Seq.length)
+            |> Array.sum
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day11input"
+"./day12input"
 |> System.IO.File.ReadAllLines
-|> array2D
-|> Day11.PartTwo.solve
+|> Day12.PartOne.solve
