@@ -1144,27 +1144,21 @@ module Day12 =
                     cache.TryGet (statuses, groupSizes)
                     |> Option.defaultWith (fun _ ->
 
-                        let status = Array.head statuses
-                        let groupSize, remainingGroupSizes = Array.head groupSizes, Array.tail groupSizes
-
                         let numberOfPossibleArrangements =
-                            match status with
-                            | Operational ->
-                                inner (Array.tail statuses, groupSizes)
-                            | Damaged ->
+
+                            let countOperational () = inner (Array.tail statuses, groupSizes)
+
+                            let countDamaged () =
+                                let groupSize = Array.head groupSizes
                                 if groupSize |> groupDoesNotFitAtStartOf statuses then
                                     0L
                                 else
-                                    inner (statuses.[ groupSize + 1 .. ], remainingGroupSizes)
-                            | Unknown ->
-                                // Add the number of cases where the spring is assumed to be operational to the number
-                                // of cases where it is assumed to be damaged.
-                                inner (Array.tail statuses, groupSizes)
-                                +
-                                    if groupSize |> groupDoesNotFitAtStartOf statuses then
-                                        0L
-                                    else
-                                        inner (statuses.[ groupSize + 1 .. ], remainingGroupSizes)
+                                    inner (statuses.[ groupSize + 1 .. ], Array.tail groupSizes)
+
+                            match Array.head statuses with
+                            | Operational -> countOperational ()
+                            | Damaged -> countDamaged ()
+                            | Unknown -> countOperational () + countDamaged ()
 
                         cache.Add((statuses, groupSizes), numberOfPossibleArrangements)
 
