@@ -1092,6 +1092,7 @@ module Day11 =
         let solve = solve 1_000_000L
 
 module Day12 =
+    open System.Collections.Generic
 
     type SpringStatus =
         | Operational
@@ -1110,12 +1111,9 @@ module Day12 =
 
     module RowInfo =
 
-        let parse (line: string) =
-            let parts = line.Split(' ')
-            {
-                Row = parts.[0] |> Seq.map SpringStatus.parse |> Seq.toArray
-                DamagedGroupSizes = parts.[1].Split(',') |> Array.map int
-            }
+        // Need to use the structural equality comparer to ensure that different arrays with the same contents are
+        // considered to be the same key.
+        let private cache = Dictionary<SpringStatus array * int array, int64>(HashIdentity.Structural)
 
         let countPossibleArrangements info =
 
@@ -1136,43 +1134,79 @@ module Day12 =
             let rec inner =
                 function
                 | [||], [||] ->
-                    1
+                    1L
                 | [||], _ ->
-                    0
+                    0L
                 | statuses, [||] ->
-                    if statuses |> Array.contains Damaged then 0 else 1
+                    if statuses |> Array.contains Damaged then 0L else 1L
                 | statuses, groupSizes ->
 
-                    let status = Array.head statuses
-                    let groupSize, remainingGroupSizes = Array.head groupSizes, Array.tail groupSizes
+                    cache.TryGet (statuses, groupSizes)
+                    |> Option.defaultWith (fun _ ->
 
-                    match status with
-                    | Operational ->
-                        inner (Array.tail statuses, groupSizes)
-                    | Damaged ->
-                        if groupSize |> groupDoesNotFitAtStartOf statuses then
-                            0
-                        else
-                            inner (statuses.[ groupSize + 1 .. ], remainingGroupSizes)
-                    | Unknown ->
-                        // If unknown, count the cases where the status is operational and the cases where it isn't.
-                        inner (Array.tail statuses, groupSizes)
-                        +
-                            if groupSize |> groupDoesNotFitAtStartOf statuses then
-                                0
-                            else
-                                inner (statuses.[ groupSize + 1 .. ], remainingGroupSizes)
+                        let status = Array.head statuses
+                        let groupSize, remainingGroupSizes = Array.head groupSizes, Array.tail groupSizes
+
+                        let numberOfPossibleArrangements =
+                            match status with
+                            | Operational ->
+                                inner (Array.tail statuses, groupSizes)
+                            | Damaged ->
+                                if groupSize |> groupDoesNotFitAtStartOf statuses then
+                                    0L
+                                else
+                                    inner (statuses.[ groupSize + 1 .. ], remainingGroupSizes)
+                            | Unknown ->
+                                // Add the number of cases where the spring is assumed to be operational to the number
+                                // of cases where it is assumed to be damaged.
+                                inner (Array.tail statuses, groupSizes)
+                                +
+                                    if groupSize |> groupDoesNotFitAtStartOf statuses then
+                                        0L
+                                    else
+                                        inner (statuses.[ groupSize + 1 .. ], remainingGroupSizes)
+
+                        cache.Add((statuses, groupSizes), numberOfPossibleArrangements)
+
+                        numberOfPossibleArrangements)
 
             inner (info.Row, info.DamagedGroupSizes)
 
+    let solve parse lines =
+        lines
+        |> Array.map (parse >> RowInfo.countPossibleArrangements)
+        |> Array.sum
+
     module PartOne =
 
-        let solve lines =
-            lines
-            |> Array.map (RowInfo.parse >> RowInfo.countPossibleArrangements)
-            |> Array.sum
+        let parseRowInfo (line: string) =
+            let parts = line.Split(' ')
+            {
+                Row = parts.[0] |> Seq.map SpringStatus.parse |> Seq.toArray
+                DamagedGroupSizes = parts.[1].Split(',') |> Array.map int
+            }
+
+        let solve = solve parseRowInfo
+
+    module PartTwo =
+
+        let parseRowInfo line =
+            line
+            |> PartOne.parseRowInfo
+            |> fun { Row = row; DamagedGroupSizes = sizes } ->
+                {
+                    Row =
+                        [| row; [| Unknown |]; row; [| Unknown |]; row; [| Unknown |]; row; [| Unknown |]; row |]
+                        |> Array.collect id
+                    DamagedGroupSizes =
+                        sizes
+                        |> Array.replicate 5
+                        |> Array.collect id
+                }
+
+        let solve = solve parseRowInfo
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./day12input"
 |> System.IO.File.ReadAllLines
-|> Day12.PartOne.solve
+|> Day12.PartTwo.solve
