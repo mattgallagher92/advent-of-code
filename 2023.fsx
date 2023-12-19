@@ -1117,58 +1117,59 @@ module Day12 =
                 DamagedGroupSizes = parts.[1].Split(',') |> Array.map int
             }
 
-        let possibleArrangements info =
+        let countPossibleArrangements info =
 
-            let matchesPattern arrangement =
-                arrangement
-                |> Seq.zip info.Row
-                |> Seq.forall (fun (r, a) -> r = a || r = Unknown)
+            let groupDoesNotFitAtStartOf (statuses: SpringStatus array) groupSize =
 
-            (info.DamagedGroupSizes, [ [] ])
-            ||> Array.foldBack (fun groupSize possibleGroupStartIndices ->
-                possibleGroupStartIndices
-                |> List.collect (fun groupStartIndices ->
+                let groupIsTooBig = groupSize > statuses.Length
+                let groupWouldIntersectOperationalSpring = statuses.[ .. groupSize - 1 ] |> Array.contains Operational
+                let followingSpringIsDamaged =
+                    statuses
+                    |> Array.tryItem groupSize
+                    |> Option.map ((=) Damaged)
+                    |> Option.defaultValue false
 
-                    let remainingPattern =
-                        match groupStartIndices with
-                        | [] -> info.Row
-                        // Go up to the first index and leave a space for an operational spring.
-                        | index :: _ -> info.Row.[ 0 .. index - 2 ]
+                groupIsTooBig
+                || groupWouldIntersectOperationalSpring
+                || followingSpringIsDamaged
 
-                    let possibleStartIndices =
-                        remainingPattern
-                        |> Array.windowed groupSize
-                        |> Array.indexed
-                        |> Array.filter (fun (_, window) ->
-                            window |> Array.forall (function Operational -> false | Damaged | Unknown -> true))
-                        |> Array.map fst
-                        |> Array.toList
+            let rec inner =
+                function
+                | [||], [||] ->
+                    1
+                | [||], _ ->
+                    0
+                | statuses, [||] ->
+                    if statuses |> Array.contains Damaged then 0 else 1
+                | statuses, groupSizes ->
 
-                    possibleStartIndices
-                    |> List.map (fun i -> i :: groupStartIndices)))
+                    let status = Array.head statuses
+                    let groupSize, remainingGroupSizes = Array.head groupSizes, Array.tail groupSizes
 
-            |> Seq.map (fun indices ->
-                let damagedIndices =
-                    info.DamagedGroupSizes
-                    |> Seq.zip indices
-                    |> Seq.collect (fun (startIndex, size) -> seq { startIndex .. startIndex + size - 1})
-                    |> Seq.toArray
-
-                seq {
-                    for i in 0 .. info.Row.Length do
-                        if damagedIndices |> Array.contains i then
-                            Damaged
+                    match status with
+                    | Operational ->
+                        inner (Array.tail statuses, groupSizes)
+                    | Damaged ->
+                        if groupSize |> groupDoesNotFitAtStartOf statuses then
+                            0
                         else
-                            Operational
-                })
+                            inner (statuses.[ groupSize + 1 .. ], remainingGroupSizes)
+                    | Unknown ->
+                        // If unknown, count the cases where the status is operational and the cases where it isn't.
+                        inner (Array.tail statuses, groupSizes)
+                        +
+                            if groupSize |> groupDoesNotFitAtStartOf statuses then
+                                0
+                            else
+                                inner (statuses.[ groupSize + 1 .. ], remainingGroupSizes)
 
-            |> Seq.filter matchesPattern
+            inner (info.Row, info.DamagedGroupSizes)
 
     module PartOne =
 
         let solve lines =
             lines
-            |> Array.map (RowInfo.parse >> RowInfo.possibleArrangements >> Seq.length)
+            |> Array.map (RowInfo.parse >> RowInfo.countPossibleArrangements)
             |> Array.sum
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
