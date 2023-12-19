@@ -1200,7 +1200,51 @@ module Day12 =
 
         let solve = solve parseRowInfo
 
+module Day13 =
+
+    module PartOne =
+
+        let row i pattern =
+            seq { 0 .. (pattern |> Array2D.length2) - 1 }
+            |> Seq.map (fun j -> Array2D.get pattern i j)
+            |> Seq.toArray
+
+        let column j pattern =
+            seq { 0 .. (pattern |> Array2D.length1) - 1 }
+            |> Seq.map (fun i -> Array2D.get pattern i j)
+            |> Seq.toArray
+
+        let hasHorizontalLineOfSymmetryBeforeRow n pattern =
+
+            let height = pattern |> Array2D.length1
+            let numRowsToTest = Math.Min(height - 1 - n, n - 1)
+
+            seq { 0 .. numRowsToTest }
+            |> Seq.forall (fun i -> row (n - 1 - i) pattern = row (n + i) pattern)
+
+        let hasVerticalLineOfSymmetryBeforeColumn n pattern =
+
+            let width = pattern |> Array2D.length2
+            let numColumnsToTest = Math.Min(width - 1 - n, n - 1)
+
+            seq { 0 .. numColumnsToTest }
+            |> Seq.forall (fun j -> column (n - 1 - j) pattern = column (n + j) pattern)
+
+        let solve (text: string) =
+            text.Split("\n\n")
+            |> Array.map (fun patternStr ->
+                patternStr.Split('\n') |> Array.filter (not << String.IsNullOrWhiteSpace) |> array2D)
+            |> Array.map (fun pattern ->
+                // Start at 1 because before row 0 would pass the test but have no reflected rows.
+                seq { 1 .. Array2D.length1 pattern - 1 }
+                |> Seq.tryFind (fun n -> pattern |> hasHorizontalLineOfSymmetryBeforeRow n)
+                |> Option.map (fun n -> n * 100)
+                |> Option.defaultWith (fun _ ->
+                    seq { 1 .. Array2D.length2 pattern - 1 }
+                    |> Seq.find (fun n -> pattern |> hasVerticalLineOfSymmetryBeforeColumn n)))
+            |> Array.sum
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day12input"
-|> System.IO.File.ReadAllLines
-|> Day12.PartTwo.solve
+"./day13input"
+|> System.IO.File.ReadAllText
+|> Day13.PartOne.solve
