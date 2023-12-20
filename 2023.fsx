@@ -61,6 +61,24 @@ module Util =
             | true, v -> Some v
             | false, _ -> None
 
+    [<RequireQualifiedAccess>]
+    module Array2D =
+
+        let row i array2D =
+            seq { 0 .. (array2D |> Array2D.length2) - 1 }
+            |> Seq.map (fun j -> Array2D.get array2D i j)
+            |> Seq.toArray
+
+        let column j array2D =
+            seq { 0 .. (array2D |> Array2D.length1) - 1 }
+            |> Seq.map (fun i -> Array2D.get array2D i j)
+            |> Seq.toArray
+
+        let columns array2D =
+            seq { 0 .. (array2D |> Array2D.length2) - 1 }
+            |> Seq.map (fun j -> column j array2D)
+            |> Seq.toArray
+
 module Day1 =
     module PartOne =
         let solve lines =
@@ -1204,23 +1222,13 @@ module Day13 =
 
     module PartOne =
 
-        let row i pattern =
-            seq { 0 .. (pattern |> Array2D.length2) - 1 }
-            |> Seq.map (fun j -> Array2D.get pattern i j)
-            |> Seq.toArray
-
-        let column j pattern =
-            seq { 0 .. (pattern |> Array2D.length1) - 1 }
-            |> Seq.map (fun i -> Array2D.get pattern i j)
-            |> Seq.toArray
-
         let hasHorizontalLineOfSymmetryBeforeRow n pattern =
 
             let height = pattern |> Array2D.length1
             let numRowPairsToTest = Math.Min(height - 1 - n, n - 1)
 
             seq { 0 .. numRowPairsToTest }
-            |> Seq.forall (fun i -> row (n - 1 - i) pattern = row (n + i) pattern)
+            |> Seq.forall (fun i -> Array2D.row (n - 1 - i) pattern = Array2D.row (n + i) pattern)
 
         let hasVerticalLineOfSymmetryBeforeColumn n pattern =
 
@@ -1228,7 +1236,7 @@ module Day13 =
             let numColumnPairsToTest = Math.Min(width - 1 - n, n - 1)
 
             seq { 0 .. numColumnPairsToTest }
-            |> Seq.forall (fun j -> column (n - 1 - j) pattern = column (n + j) pattern)
+            |> Seq.forall (fun j -> Array2D.column (n - 1 - j) pattern = Array2D.column (n + j) pattern)
 
         let solve (text: string) =
             text.Split("\n\n")
@@ -1296,7 +1304,32 @@ module Day13 =
                     |> Seq.find (fun n -> pattern |> hasSmudgedVerticalLineOfSymmetryBeforeColumn n)))
             |> Array.sum
 
+module Day14 =
+
+    module PartOne =
+
+        let solve lines =
+            lines
+            |> array2D
+            |> Array2D.columns
+            // Produce a sequence of pairs of the indices (counted from the south edge, starting with 1) where the
+            // boulders stop and the number of boulders lined up.
+            |> Seq.collect (fun col ->
+                ([ (0, 0) ], col |> Seq.rev |> Seq.mapi (fun i c -> (i + 1, c)))
+                ||> Seq.fold (fun list (i, c) ->
+                    match c, list with
+                    | '.', (_, n) :: tail -> (i, n) :: tail
+                    | 'O', (_, n) :: tail -> (i, n + 1) :: tail
+                    | '#', list -> (i, 0) :: list
+                    | _, [] -> failwith "Bug: invalid state"
+                    | c, _ -> failwith $"Column %A{col} has invalid character '%c{c}' in position %i{i}"
+                )
+                |> Seq.filter (snd >> ((<>) 0)))
+            // Each pair (a,b) contributes (a + (a - 1) + ... + (a - b + 1)). There are b terms, which
+            // average (2 * a - b + 1) / 2.
+            |> Seq.sumBy (fun (a, b) -> ((2 * a - b + 1) * b) / 2)
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day13input"
-|> System.IO.File.ReadAllText
-|> Day13.PartTwo.solve
+"./day14input"
+|> System.IO.File.ReadAllLines
+|> Day14.PartOne.solve
