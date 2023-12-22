@@ -1437,7 +1437,26 @@ module Day14 =
             elementCalculator 1_000_000_000
             |> totalLoad
 
+module Day15 =
+
+    module PartOne =
+
+        let solve (initializationSequence: string) =
+
+            let hash (input: string) =
+                (0, input)
+                ||> Seq.fold (fun currentValue c -> ((currentValue + (int c)) * 17 % 256))
+
+            let steps =
+                initializationSequence
+                |> String.filter ((<>) '\n')
+                |> fun s -> s.Split(',')
+
+            steps
+            |> Array.map hash
+            |> Array.sum
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day14input"
-|> System.IO.File.ReadAllLines
-|> Day14.PartTwo.solve
+"./day15input"
+|> System.IO.File.ReadAllText
+|> Day15.PartOne.solve
