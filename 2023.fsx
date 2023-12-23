@@ -1497,7 +1497,112 @@ module Day15 =
                     |> snd
                 sum + boxSum)
 
+module Day16 =
+
+    module PartOne =
+
+        type Tile =
+            | EmptySpace
+            | FMirror
+            | BMirror
+            | HSplitter
+            | VSplitter
+
+        type Direction =
+            | Upward
+            | Downward
+            | Leftward
+            | Rightward
+
+        type BeamSegment = {
+            Row: int
+            Col: int
+            Direction: Direction
+        }
+
+        let parse lines =
+            lines
+            |> array2D
+            |> Array2D.map (
+                function
+                | '.' -> EmptySpace
+                | '/' -> FMirror
+                | '\\' -> BMirror
+                | '-' -> HSplitter
+                | '|' -> VSplitter
+                | c -> failwith $"Invalid tile char '%c{c}'")
+
+        let nextSegments layout =
+
+            let height, width = layout |> Array2D.length1, layout |> Array2D.length2
+
+            // Return anonymous function to avoid recalculation of height and width.
+            fun segment ->
+
+                let up =
+                    if segment.Row > 0 then
+                        Some { segment with Row = segment.Row - 1; Direction = Upward }
+                    else
+                        None
+                let down =
+                    if segment.Row < height - 1 then
+                        Some { segment with Row = segment.Row + 1; Direction = Downward }
+                    else
+                        None
+                let left =
+                    if segment.Col > 0 then
+                        Some { segment with Col = segment.Col - 1; Direction = Leftward }
+                    else
+                        None
+                let right =
+                    if segment.Col < width - 1 then
+                        Some { segment with Col = segment.Col + 1; Direction = Rightward }
+                    else
+                        None
+
+                match layout.[ segment.Row, segment.Col ], segment.Direction with
+                | (EmptySpace | VSplitter), Upward -> [| up |]
+                | (EmptySpace | VSplitter), Downward -> [| down |]
+                | (EmptySpace | HSplitter), Leftward -> [| left |]
+                | (EmptySpace | HSplitter), Rightward -> [| right |]
+                | VSplitter, (Leftward | Rightward) -> [| up; down |]
+                | HSplitter, (Upward | Downward) -> [| left; right |]
+                | FMirror, Upward -> [| right |]
+                | FMirror, Downward -> [| left |]
+                | FMirror, Leftward -> [| down |]
+                | FMirror, Rightward -> [| up |]
+                | BMirror, Upward -> [| left |]
+                | BMirror, Downward -> [| right |]
+                | BMirror, Leftward -> [| up |]
+                | BMirror, Rightward -> [| down |]
+                |> Array.choose id
+
+        let calculatePath layout =
+
+            let startSegment = { Row = 0; Col = 0; Direction = Rightward }
+
+            [| startSegment |]
+            |> Seq.unfold (Array.collect (nextSegments layout) >> function [||] -> None | next -> Some (next, next))
+            |> Seq.append (seq { [| startSegment |] })
+
+        let solve lines =
+
+            let layout = parse lines
+
+            calculatePath layout
+            |> Seq.scan
+                (fun (olderSegments, lastAddedSegments) newSegments ->
+                    let oldSegments = Array.append olderSegments lastAddedSegments
+                    (oldSegments, newSegments |> Array.except oldSegments))
+                ([||], [||])
+            |> Seq.indexed
+            |> Seq.takeWhile (fun (i, (_, lastAdded)) -> i = 0 || lastAdded |> Array.isEmpty |> not)
+            |> Seq.collect (snd >> snd)
+            |> Seq.map (fun segment -> segment.Row, segment.Col)
+            |> Seq.distinct
+            |> Seq.length
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day15input"
-|> System.IO.File.ReadAllText
-|> Day15.PartTwo.solve
+"./day16input"
+|> System.IO.File.ReadAllLines
+|> Day16.PartOne.solve
