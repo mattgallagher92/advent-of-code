@@ -110,6 +110,10 @@ module Util =
             | true, v -> Some v
             | false, _ -> None
 
+    let memoize f =
+        let cache = Collections.Generic.Dictionary<'key, 'value>()
+        fun x -> cache.TryGet x |> Option.defaultWith (fun _ -> x |> f |> fun y -> cache.Add(x, y); y)
+
     [<RequireQualifiedAccess>]
     module Array2D =
 
@@ -1530,6 +1534,7 @@ module Day16 =
             | '|' -> VSplitter
             | c -> failwith $"Invalid tile char '%c{c}'")
 
+    /// Returns a function that, given a segment, returns the segments that come next.
     let nextSegments layout =
 
         let height, width = layout |> Array2D.length1, layout |> Array2D.length2
@@ -1575,25 +1580,58 @@ module Day16 =
             | BMirror, Rightward -> [| down |]
             |> Array.choose id
 
-    let calculatePath layout startSegment =
+    /// A sequence whose nth element is an array of BeamSegments that the beam is in n steps after the startSegment.
+    let steps layout startSegment =
         [| startSegment |]
         |> Seq.unfold (Array.collect (nextSegments layout) >> function [||] -> None | next -> Some (next, next))
         |> Seq.append (seq { [| startSegment |] })
 
+    /// Returns a function that, given a BeamSegment, returns the path starting from it until it splits or leaves the
+    /// grid. The path before the split or exit is returned as the first element of the pair; the second element
+    /// contains the segments that come after the split or exit.
+    let pathUntilSplitOrExit layout =
+
+        fun startSegment ->
+
+            startSegment
+            |> steps layout
+            |> Seq.takeUntilFirstMatch (Array.length >> ((<>) 1))
+            |> Seq.toArray
+            |> fun until ->
+                let beforeSplitOrExit = until |> Array.take (until.Length - 1) |> Array.map Array.head
+                let afterSplitOrExit = until |> Array.last
+                beforeSplitOrExit, afterSplitOrExit
+
+        |> memoize
+
     let countEnergizedTiles layout startSegment =
-        startSegment
-        |> calculatePath layout
-        |> Seq.scan
-            (fun (olderSegments, lastAddedSegments) newSegments ->
-                let oldSegments = Array.append olderSegments lastAddedSegments
-                (oldSegments, newSegments |> Array.except oldSegments))
-            ([||], [||])
-        |> Seq.indexed
-        |> Seq.takeWhile (fun (i, (_, lastAdded)) -> i = 0 || lastAdded |> Array.isEmpty |> not)
-        |> Seq.collect (snd >> snd)
-        |> Seq.map (fun segment -> segment.Row, segment.Col)
-        |> Seq.distinct
-        |> Seq.length
+
+        let pathUntilSplitOrExit = pathUntilSplitOrExit layout
+
+        let startSegments =
+            (Set.empty, Set [ startSegment ])
+            |> Seq.unfold
+                (fun (oldStartSegments, startSegments) ->
+
+                    let oldSegments = Set.union oldStartSegments startSegments
+
+                    let newStartSegments =
+                        startSegments
+                        |> Set.map (pathUntilSplitOrExit >> snd >> set)
+                        |> Set.unionMany
+                        |> fun s -> Set.difference s oldSegments
+
+                    if newStartSegments |> Set.isEmpty then
+                        None
+                    else
+                        Some ((oldSegments |> Set.union newStartSegments, (oldSegments, newStartSegments))))
+            |> Seq.last
+
+        startSegments
+        |> Set.map (fun x -> x |> pathUntilSplitOrExit |> fst |> Array.append [| x |] |> set)
+        |> Set.unionMany
+        |> Set.map (fun seg -> seg.Row, seg.Col)
+        |> Set.count
 
     module PartOne =
 
@@ -1601,6 +1639,7 @@ module Day16 =
 
     module PartTwo =
 
+        // TODO: speed up - takes about 15 seconds.
         let solve lines =
 
             let layout = parse lines
