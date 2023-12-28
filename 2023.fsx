@@ -470,6 +470,7 @@ module Day5 =
             (category, x)
 
     module PartOne =
+
         type Almanac = {
             Seeds: int64 list
             Maps: Map list
@@ -477,13 +478,11 @@ module Day5 =
 
         let pSeeds = pstring "seeds:" >>. many (pSpace >>. pint64)
 
-        let pFile = pipe2 pSeeds (many (spaces1 >>? pMap)) (fun seeds maps -> { Seeds = seeds; Maps = maps })
+        let pAlmanac = pipe2 pSeeds (many (spaces1 >>? pMap)) (fun seeds maps -> { Seeds = seeds; Maps = maps })
 
-        let solve filePath =
-            let almanac =
-                match runParserOnFile pFile () filePath Text.Encoding.UTF8 with
-                | Success (almanac, _, _) -> almanac
-                | Failure (msg, _, _) -> failwith msg
+        let solve text =
+
+            let almanac = Parser.runAndUnwrap id pAlmanac text
 
             let applyAllMaps =
                 almanac.Maps
@@ -496,6 +495,7 @@ module Day5 =
             |> List.minBy snd
 
     module PartTwo =
+
         type SeedRange =
             {
                 SeedRangeStart: int64
@@ -517,54 +517,120 @@ module Day5 =
                     (pSpace >>. pint64)
                     (fun i j -> { SeedRangeStart = i; SeedRangeLength = j }))
 
-        let pFile = pipe2 pSeeds (many (spaces1 >>? pMap)) (fun seeds maps -> { SeedRanges = seeds; Maps = maps })
+        let pAlmanac = pipe2 pSeeds (many (spaces1 >>? pMap)) (fun seeds maps -> { SeedRanges = seeds; Maps = maps })
 
-        let solve filePath =
-            let almanac =
-                match runParserOnFile pFile () filePath Text.Encoding.UTF8 with
-                | Success (almanac, _, _) -> almanac
-                | Failure (msg, _, _) -> failwith msg
+        /// Adds ranges where source values map to the same destination value.
+        let includeImplicitRanges map =
 
-            // The maps have inverses because - although this is not explicitly stated - they seem to be permutations.
-            let applyInverse map (category, x) =
-                if category = map.Header.DestinationCategory then
-                    let applicableRange =
-                        map.Ranges
-                        |> List.tryFind (fun range ->
-                            range.DestinationRangeStart <= x && x < range.DestinationRangeStart + range.RangeLength)
+            let explicitRanges = map.Ranges
 
-                    match applicableRange with
-                    | Some range -> (map.Header.SourceCategory, x + range.SourceRangeStart - range.DestinationRangeStart)
-                    | None -> (map.Header.SourceCategory, x)
-                else
-                    (category, x)
+            let implicitRanges =
 
-            let mapsRev =
-                almanac.Maps
-                |> mapsInOrder
-                |> List.rev
+                let sortedExplicit =
+                    explicitRanges
+                    |> Seq.sortBy (fun r -> r.SourceRangeStart)
+                    |> Seq.toArray
 
-            let applyAllInverseMaps =
-                mapsRev
-                |> List.map applyInverse
-                |> List.reduce (>>)
+                let before =
 
-            let seeds =
+                    let firstExplicitRangeStart = sortedExplicit |> Array.head |> fun r -> r.SourceRangeStart
+
+                    if firstExplicitRangeStart = 0L then
+                        None
+                    else
+                        Some {
+                            SourceRangeStart = 0L
+                            DestinationRangeStart = 0L
+                            RangeLength = firstExplicitRangeStart
+                        }
+
+                let between =
+                    sortedExplicit
+                    |> Seq.pairwise
+                    |> Seq.map (fun (r1, r2) ->
+                        let nextRangeStart = r1.SourceRangeStart + r1.RangeLength
+                        if nextRangeStart < r2.SourceRangeStart then
+                            Some {
+                                SourceRangeStart = nextRangeStart
+                                DestinationRangeStart = nextRangeStart
+                                RangeLength = r2.SourceRangeStart - nextRangeStart
+                            }
+                        else
+                            None)
+
+                let after =
+
+                    let nextRangeStart =
+                        sortedExplicit |> Array.last |> fun r -> r.SourceRangeStart + r.RangeLength
+
+                    Some {
+                        SourceRangeStart = nextRangeStart
+                        DestinationRangeStart = nextRangeStart
+                        RangeLength = Int64.MaxValue - nextRangeStart
+                    }
+
+                seq { before; yield! between; after } |> Seq.choose id
+
+            { map with
+                  Ranges =
+                    explicitRanges
+                    |> Seq.append implicitRanges
+                    |> Seq.sortBy (fun r -> r.DestinationRangeStart)
+                    |> Seq.toList
+            }
+
+        type CategoryRange = {
+            Category: string
+            RStart: int64
+            RLength: int64
+        }
+
+        let solve text =
+
+            let almanac = Parser.runAndUnwrap id pAlmanac text
+
+            let initialCategoryRanges =
                 almanac.SeedRanges
-                |> Seq.collect (fun seedRange -> seedRange.Seeds)
-                |> Set
+                |> List.map (fun sr -> { Category = "seed"; RStart = sr.SeedRangeStart; RLength = sr.SeedRangeLength })
 
-            let lastMap = mapsRev.Head
+            // Including implicit ranges simplifies calculation.
+            let maps = almanac.Maps |> List.map includeImplicitRanges |> mapsInOrder
 
-            let destinationMax =
-                lastMap.Ranges
-                |> List.map (fun range -> range.DestinationRangeStart + range.RangeLength)
-                |> List.max
+            (initialCategoryRanges, maps)
+            ||> List.fold (fun categoryRanges map ->
 
-            seq { 0L .. destinationMax }
-            |> Seq.find (fun y ->
-                let category, x = applyAllInverseMaps (lastMap.Header.DestinationCategory, y)
-                category = "seed" && seeds.Contains x)
+                let sortedRanges = map.Ranges |> List.sortBy  (fun range -> range.SourceRangeStart)
+
+                categoryRanges
+                |> List.collect (fun cr ->
+
+                    let cat, start = applyMap map (cr.Category, cr.RStart)
+
+                    let filteredRanges =
+                        sortedRanges
+                        |> List.filter (fun r ->
+                            cr.RStart < r.SourceRangeStart && r.SourceRangeStart < cr.RStart + cr.RLength)
+
+                    let laterPartitions =
+                        filteredRanges
+                        |> List.choose (fun r ->
+                            if cr.RStart < r.SourceRangeStart && r.SourceRangeStart < cr.RStart + cr.RLength then
+                                Some {
+                                    Category = map.Header.DestinationCategory
+                                    RStart = r.DestinationRangeStart
+                                    RLength = Math.Min(r.RangeLength, cr.RStart + cr.RLength - r.SourceRangeStart)
+                                }
+                            else
+                                None)
+
+                    let firstPartitionLength =
+                        match filteredRanges |> List.tryHead with
+                        | Some range -> range.SourceRangeStart - cr.RStart
+                        | None -> cr.RLength
+
+                    { Category = cat; RStart = start; RLength = firstPartitionLength } :: laterPartitions))
+            |> List.map (fun r -> r.RStart)
+            |> List.min
 
 module Day6 =
     open FParsec
@@ -1733,6 +1799,6 @@ module Day16 =
             |> Seq.max
 
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./day16input"
-|> System.IO.File.ReadAllLines
-|> Day16.PartTwo.solve
+"./input/2023/day5"
+|> System.IO.File.ReadAllText
+|> Day5.PartTwo.solve
