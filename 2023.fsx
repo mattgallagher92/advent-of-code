@@ -525,16 +525,46 @@ module Day5 =
                 | Success (almanac, _, _) -> almanac
                 | Failure (msg, _, _) -> failwith msg
 
-            let applyAllMaps =
+            // The maps have inverses because - although this is not explicitly stated - they seem to be permutations.
+            let applyInverse map (category, x) =
+                if category = map.Header.DestinationCategory then
+                    let applicableRange =
+                        map.Ranges
+                        |> List.tryFind (fun range ->
+                            range.DestinationRangeStart <= x && x < range.DestinationRangeStart + range.RangeLength)
+
+                    match applicableRange with
+                    | Some range -> (map.Header.SourceCategory, x + range.SourceRangeStart - range.DestinationRangeStart)
+                    | None -> (map.Header.SourceCategory, x)
+                else
+                    (category, x)
+
+            let mapsRev =
                 almanac.Maps
                 |> mapsInOrder
-                |> List.map applyMap
+                |> List.rev
+
+            let applyAllInverseMaps =
+                mapsRev
+                |> List.map applyInverse
                 |> List.reduce (>>)
 
-            almanac.SeedRanges
-            |> Seq.collect (fun seedRange -> seedRange.Seeds)
-            |> Seq.map (fun i -> applyAllMaps ("seed", i))
-            |> Seq.minBy snd
+            let seeds =
+                almanac.SeedRanges
+                |> Seq.collect (fun seedRange -> seedRange.Seeds)
+                |> Set
+
+            let lastMap = mapsRev.Head
+
+            let destinationMax =
+                lastMap.Ranges
+                |> List.map (fun range -> range.DestinationRangeStart + range.RangeLength)
+                |> List.max
+
+            seq { 0L .. destinationMax }
+            |> Seq.find (fun y ->
+                let category, x = applyAllInverseMaps (lastMap.Header.DestinationCategory, y)
+                category = "seed" && seeds.Contains x)
 
 module Day6 =
     open FParsec
