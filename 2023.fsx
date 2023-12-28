@@ -404,56 +404,78 @@ module Day4 =
                 contributions.Add(card.Number, contribution)
 
                 contribution)
+
 module Day5 =
     open FParsec
 
+    type Range = {
+        DestinationRangeStart: int64
+        SourceRangeStart: int64
+        RangeLength: int64
+    }
+
+    type MapHeader = {
+        SourceCategory: string
+        DestinationCategory: string
+    }
+
+    type Map = {
+        Header: MapHeader
+        Ranges: Range list
+    }
+
+    let pSpace = pchar ' '
+
+    let pMapHeader =
+        pipe2
+            (many1 letter .>> pstring "-to-")
+            (many1 letter .>> pSpace .>> pstring "map:")
+            (fun letters letters' -> {
+                SourceCategory = String(letters |> List.toArray)
+                DestinationCategory = String(letters' |> List.toArray)
+            })
+
+    let pRange =
+        pipe3 (pint64 .>> pSpace) (pint64 .>> pSpace) pint64 (fun i j k -> {
+            DestinationRangeStart = i
+            SourceRangeStart = j
+            RangeLength = k
+        })
+
+    let pMap =
+        pipe2
+            pMapHeader
+            (many (spaces >>? pRange))
+            (fun header ranges -> { Header = header; Ranges = ranges })
+
+    let mapsInOrder unorderedMaps =
+        List.unfold
+            (fun sourceCategory ->
+                unorderedMaps
+                |> List.tryFind (fun m -> m.Header.SourceCategory = sourceCategory)
+                |> Option.map (fun map -> map, map.Header.DestinationCategory))
+            "seed"
+
+    let applyMap map (category, x) =
+        if category = map.Header.SourceCategory then
+            let applicableRange =
+                map.Ranges
+                |> List.tryFind (fun range ->
+                    range.SourceRangeStart <= x && x < range.SourceRangeStart + range.RangeLength)
+
+            match applicableRange with
+            | Some range -> (map.Header.DestinationCategory, x + range.DestinationRangeStart - range.SourceRangeStart)
+            | None -> (map.Header.DestinationCategory, x)
+        else
+            (category, x)
+
     module PartOne =
-        type Range = {
-            DestinationRangeStart: int64
-            SourceRangeStart: int64
-            RangeLength: int64
-        }
-
-        type MapHeader = {
-            SourceCategory: string
-            DestinationCategory: string
-        }
-
-        type Map = {
-            Header: MapHeader
-            Ranges: Range list
-        }
-
         type Almanac = {
             Seeds: int64 list
             Maps: Map list
         }
 
-        let pSpace = pchar ' '
-
         let pSeeds = pstring "seeds:" >>. many (pSpace >>. pint64)
-
-        let pMapHeader =
-            pipe2
-                (many1 letter .>> pstring "-to-")
-                (many1 letter .>> pSpace .>> pstring "map:")
-                (fun letters letters' -> {
-                    SourceCategory = String(letters |> List.toArray)
-                    DestinationCategory = String(letters' |> List.toArray)
-                })
-
-        let pRange =
-            pipe3 (pint64 .>> pSpace) (pint64 .>> pSpace) pint64 (fun i j k -> {
-                DestinationRangeStart = i
-                SourceRangeStart = j
-                RangeLength = k
-            })
-
-        let pMap =
-            pipe2
-                pMapHeader
-                (many (spaces >>? pRange))
-                (fun header ranges -> { Header = header; Ranges = ranges })
 
         let pFile = pipe2 pSeeds (many (spaces1 >>? pMap)) (fun seeds maps -> { Seeds = seeds; Maps = maps })
 
@@ -463,36 +485,56 @@ module Day5 =
                 | Success (almanac, _, _) -> almanac
                 | Failure (msg, _, _) -> failwith msg
 
-            let mapsInOrder =
-                List.unfold
-                    (fun sourceCategory ->
-                        almanac.Maps
-                        |> List.tryFind (fun m -> m.Header.SourceCategory = sourceCategory)
-                        |> Option.map (fun map -> map, map.Header.DestinationCategory))
-                    "seed"
-
-            let applyMap map (category, x) =
-                if category = map.Header.SourceCategory then
-                    let applicableRange =
-                        map.Ranges
-                        |> List.tryFind (fun range ->
-                            range.SourceRangeStart <= x && x < range.SourceRangeStart + range.RangeLength)
-
-                    let dest = map.Header.DestinationCategory
-                    match applicableRange with
-                    | Some range -> (dest, x + range.DestinationRangeStart - range.SourceRangeStart)
-                    | None -> (dest, x)
-                else
-                    (category, x)
-
             let applyAllMaps =
-                mapsInOrder
+                almanac.Maps
+                |> mapsInOrder
                 |> List.map applyMap
                 |> List.reduce (>>)
 
             almanac.Seeds
             |> List.map (fun i -> applyAllMaps ("seed", i))
             |> List.minBy snd
+
+    module PartTwo =
+        type SeedRange =
+            {
+                SeedRangeStart: int64
+                SeedRangeLength: int64
+            }
+            member this.Seeds =
+                seq { this.SeedRangeStart .. (this.SeedRangeStart + this.SeedRangeLength - 1L) }
+
+        type Almanac = {
+            SeedRanges: SeedRange list
+            Maps: Map list
+        }
+
+        let pSeeds =
+            pstring "seeds:"
+            >>. many
+                (pipe2
+                    (pSpace >>. pint64)
+                    (pSpace >>. pint64)
+                    (fun i j -> { SeedRangeStart = i; SeedRangeLength = j }))
+
+        let pFile = pipe2 pSeeds (many (spaces1 >>? pMap)) (fun seeds maps -> { SeedRanges = seeds; Maps = maps })
+
+        let solve filePath =
+            let almanac =
+                match runParserOnFile pFile () filePath Text.Encoding.UTF8 with
+                | Success (almanac, _, _) -> almanac
+                | Failure (msg, _, _) -> failwith msg
+
+            let applyAllMaps =
+                almanac.Maps
+                |> mapsInOrder
+                |> List.map applyMap
+                |> List.reduce (>>)
+
+            almanac.SeedRanges
+            |> Seq.collect (fun seedRange -> seedRange.Seeds)
+            |> Seq.map (fun i -> applyAllMaps ("seed", i))
+            |> Seq.minBy snd
 
 module Day6 =
     open FParsec
