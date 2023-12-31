@@ -35,6 +35,10 @@ module Util =
 
     [<RequireQualifiedAccess>]
     module Seq =
+
+        let tryMin xs =
+            if Seq.isEmpty xs then None else Some (Seq.min xs)
+
         let containsRepeats xs = Seq.length (Seq.distinct xs) < Seq.length xs
 
         /// Returns a sequence up to and including the first element of the input sequence that matches the predicate,
@@ -1904,16 +1908,35 @@ module Day17 =
 
                         let newHeatLoss = minHeatLossTo.[current] + map.[ row, col ]
 
-                        // TODO: can optimise by checking nodes at same location with shorter approach too.
-                        match minHeatLossTo.TryGet next with
-                        | None ->
+                        /// True if we have already hit a node for the same location as next with an approach that is at
+                        /// least as short as next's in the same direction, and with a heat loss no greater. Any paths
+                        /// from next have heat loss that is no better than such a node.
+                        let equalOrBetterNodeAlreadyVisited =
+                            match next.Approach with
+                            | Some (dir, ThreeSteps) ->
+                                seq {
+                                    { next with Approach = Some (dir, OneStep) }
+                                    { next with Approach = Some (dir, TwoSteps) }
+                                    next
+                                }
+                            | Some (dir, TwoSteps) ->
+                                seq {
+                                    { next with Approach = Some (dir, OneStep) }
+                                    next
+                                }
+                            | Some (_, OneStep)
+                            | None ->
+                                seq { next }
+                            |> Seq.collect (fun n -> minHeatLossTo.TryGet n |> Option.toArray)
+                            |> Seq.tryMin
+                            |> Option.map (fun minHeatLoss -> minHeatLoss <= newHeatLoss)
+                            |> Option.defaultValue false
+
+                        if equalOrBetterNodeAlreadyVisited then
+                            ()
+                        else
                             minHeatLossTo.[next] <- newHeatLoss
-                            nodesByHeatLoss.Enqueue(next, newHeatLoss)
-                        | Some heatLoss when newHeatLoss < heatLoss ->
-                            minHeatLossTo.[next] <- newHeatLoss
-                            nodesByHeatLoss.Enqueue(next, newHeatLoss)
-                        | Some _ ->
-                            ())
+                            nodesByHeatLoss.Enqueue(next, newHeatLoss))
 
             minHeatLossToEndLocation
 
