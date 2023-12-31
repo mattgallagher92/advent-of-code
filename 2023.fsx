@@ -1820,15 +1820,11 @@ module Day17 =
                 | Up | Down -> [| Left; Right |]
                 | Left | Right -> [| Up; Down |]
 
-        type SingleDirectionStepCount =
-            | OneStep
-            | TwoSteps
-            | ThreeSteps
-
         type Node = {
             Location: int * int
             // Optional because there is no approach for the start node.
-            Approach: (Direction * SingleDirectionStepCount) option
+            /// int represents number of steps in that direction leading up to the location.
+            Approach: (Direction * int) option
         }
 
         let locationInDirection numRows numCols (row, col) direction =
@@ -1847,35 +1843,28 @@ module Day17 =
             match node.Approach, node.Location with
             | None, (0, 0) ->
                 seq {
-                    { Location = (0, 1); Approach = Some (Right, OneStep) }
-                    { Location = (1, 0); Approach = Some (Down, OneStep) }
+                    { Location = (0, 1); Approach = Some (Right, 1) }
+                    { Location = (1, 0); Approach = Some (Down, 1) }
                 }
 
             | None, loc ->
                 failwith $"Non-start node %A{loc} has no approach"
-
-            | Some (entryDir, ThreeSteps), loc ->
-                entryDir
-                |> Direction.orthogonal
-                |> Seq.choose (fun exitDir ->
-                    locationInDirection numRows numCols loc exitDir
-                    |> Option.map (fun newLoc -> { Location = newLoc; Approach = Some (exitDir, OneStep) }))
 
             | Some (entryDir, stepCount), loc ->
                 entryDir
                 |> Direction.orthogonal
                 |> Seq.map (fun exitDir ->
                     locationInDirection numRows numCols loc exitDir
-                    |> Option.map (fun newLoc -> { Location = newLoc; Approach = Some (exitDir, OneStep) }))
+                    |> Option.map (fun newLoc -> { Location = newLoc; Approach = Some (exitDir, 1) }))
                 |> Seq.append (
                     locationInDirection numRows numCols loc entryDir
-                    |> Option.map (fun newLoc ->
-                        let newStepCount =
-                            match stepCount with
-                            | OneStep -> TwoSteps
-                            | TwoSteps -> ThreeSteps
-                            | ThreeSteps -> failwith "Cannot increment ThreeSteps"
-                        { Location = newLoc; Approach = Some (entryDir, newStepCount) })
+                    |> Option.bind (fun newLoc ->
+                        match stepCount with
+                        | 1 -> Some 2
+                        | 2 -> Some 3
+                        | _ -> None
+                        |> Option.map (fun newStepCount ->
+                            { Location = newLoc; Approach = Some (entryDir, newStepCount) }))
                     |> Seq.singleton)
                 |> Seq.choose id
 
@@ -1913,18 +1902,9 @@ module Day17 =
                         /// from next have heat loss that is no better than such a node.
                         let equalOrBetterNodeAlreadyVisited =
                             match next.Approach with
-                            | Some (dir, ThreeSteps) ->
-                                seq {
-                                    { next with Approach = Some (dir, OneStep) }
-                                    { next with Approach = Some (dir, TwoSteps) }
-                                    next
-                                }
-                            | Some (dir, TwoSteps) ->
-                                seq {
-                                    { next with Approach = Some (dir, OneStep) }
-                                    next
-                                }
-                            | Some (_, OneStep)
+                            | Some (dir, stepCount) ->
+                                seq { 1 .. stepCount }
+                                |> Seq.map (fun sc -> { next with Approach = Some (dir, sc) })
                             | None ->
                                 seq { next }
                             |> Seq.collect (fun n -> minHeatLossTo.TryGet n |> Option.toArray)
