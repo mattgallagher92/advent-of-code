@@ -1798,7 +1798,126 @@ module Day16 =
             |> Seq.map (countEnergizedTiles layout)
             |> Seq.max
 
+module Day17 =
+    open System.Collections.Generic
+
+    module PartOne =
+
+        type Direction =
+            | Up
+            | Down
+            | Left
+            | Right
+
+        module Direction =
+
+            let orthogonal =
+                function
+                | Up | Down -> [| Left; Right |]
+                | Left | Right -> [| Up; Down |]
+
+        type SingleDirectionStepCount =
+            | OneStep
+            | TwoSteps
+            | ThreeSteps
+
+        type Node = {
+            Location: int * int
+            // Optional because there is no approach for the start node.
+            Approach: (Direction * SingleDirectionStepCount) option
+        }
+
+        let locationInDirection numRows numCols (row, col) direction =
+            match direction, row, col with
+            | Up, 0, _ -> None
+            | Up, row, col -> Some (row - 1, col)
+            | Down, row, _ when row = numRows - 1 -> None
+            | Down, row, col -> Some (row + 1, col)
+            | Left, _, 0 -> None
+            | Left, row, col -> Some (row, col - 1)
+            | Right, _, col when col = numCols - 1 -> None
+            | Right, row, col -> Some (row, col + 1)
+
+        let nextNodes numRows numCols node =
+
+            match node.Approach, node.Location with
+            | None, (0, 0) ->
+                seq {
+                    { Location = (0, 1); Approach = Some (Right, OneStep) }
+                    { Location = (1, 0); Approach = Some (Down, OneStep) }
+                }
+
+            | None, loc ->
+                failwith $"Non-start node %A{loc} has no approach"
+
+            | Some (entryDir, ThreeSteps), loc ->
+                entryDir
+                |> Direction.orthogonal
+                |> Seq.choose (fun exitDir ->
+                    locationInDirection numRows numCols loc exitDir
+                    |> Option.map (fun newLoc -> { Location = newLoc; Approach = Some (exitDir, OneStep) }))
+
+            | Some (entryDir, stepCount), loc ->
+                entryDir
+                |> Direction.orthogonal
+                |> Seq.map (fun exitDir ->
+                    locationInDirection numRows numCols loc exitDir
+                    |> Option.map (fun newLoc -> { Location = newLoc; Approach = Some (exitDir, OneStep) }))
+                |> Seq.append (
+                    locationInDirection numRows numCols loc entryDir
+                    |> Option.map (fun newLoc ->
+                        let newStepCount =
+                            match stepCount with
+                            | OneStep -> TwoSteps
+                            | TwoSteps -> ThreeSteps
+                            | ThreeSteps -> failwith "Cannot increment ThreeSteps"
+                        { Location = newLoc; Approach = Some (entryDir, newStepCount) })
+                    |> Seq.singleton)
+                |> Seq.choose id
+
+        // Uses Dijkstra's algorithm.
+        let solve lines =
+
+            let map = lines |> array2D |> Array2D.map (Char.ToString >> Int32.Parse)
+            let numRows, numCols = map |> Array2D.length1, map |> Array2D.length2
+            let nextNodes = nextNodes numRows numCols
+
+            let startNode = { Location = (0, 0); Approach = None }
+            let endLocation = (numRows - 1, numCols - 1)
+
+            let nodesByHeatLoss = PriorityQueue<Node, int>()
+            nodesByHeatLoss.Enqueue(startNode, 0)
+            let minHeatLossTo = Dictionary<Node, int> [ KeyValuePair (startNode, 0) ]
+            let mutable minHeatLossToEndLocation : int option = None
+
+            while minHeatLossToEndLocation.IsNone && nodesByHeatLoss.Count > 0 do
+
+                match nodesByHeatLoss.Dequeue() with
+                | current when current.Location = endLocation ->
+                    minHeatLossToEndLocation <- Some minHeatLossTo.[current]
+
+                | current ->
+
+                    current
+                    |> nextNodes
+                    |> Seq.iter (fun ({ Location = row, col } as next) ->
+
+                        let newHeatLoss = minHeatLossTo.[current] + map.[ row, col ]
+
+                        // TODO: can optimise by checking nodes at same location with shorter approach too.
+                        match minHeatLossTo.TryGet next with
+                        | None ->
+                            minHeatLossTo.[next] <- newHeatLoss
+                            nodesByHeatLoss.Enqueue(next, newHeatLoss)
+                        | Some heatLoss when newHeatLoss < heatLoss ->
+                            minHeatLossTo.[next] <- newHeatLoss
+                            nodesByHeatLoss.Enqueue(next, newHeatLoss)
+                        | Some _ ->
+                            ())
+
+            minHeatLossToEndLocation
+
 // FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
-"./input/2023/day5"
-|> System.IO.File.ReadAllText
-|> Day5.PartTwo.solve
+"./input/2023/day17"
+|> System.IO.File.ReadAllLines
+|> Day17.PartOne.solve
