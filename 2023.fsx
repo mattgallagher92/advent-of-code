@@ -1957,6 +1957,84 @@ module Day18 =
         Metres: int
     }
 
+    let calculateEdgeCoords plan =
+        ([| (0, 0) |], plan)
+        ||> Array.fold (fun edgeCoords step ->
+
+            let row, col = edgeCoords |> Array.last
+
+            let newCoords =
+                match step.Direction with
+                | Up -> [| 1 .. step.Metres |] |> Array.map (fun i -> (row - i, col))
+                | Down -> [| 1 .. step.Metres |] |> Array.map (fun i -> (row + i, col))
+                | Left -> [| 1 .. step.Metres |] |> Array.map (fun i -> (row, col - i))
+                | Right -> [| 1 .. step.Metres |] |> Array.map (fun i -> (row, col + i))
+
+            Array.append edgeCoords newCoords)
+
+    // Uses breadth-first search to determine squares outside the trench.
+    let calculateExteriorSquares
+        trenchEdgeCoords
+        (boundingRectangleTop, boundingRectangleBottom, boundingRectangleLeft, boundingRectangleRight)
+        =
+
+        let exteriorSquaresOnRectangleEdge =
+            [|
+
+                for col in boundingRectangleLeft .. boundingRectangleRight do
+                    boundingRectangleTop, col
+                    boundingRectangleBottom, col
+
+                for row in boundingRectangleTop .. boundingRectangleBottom do
+                    row, boundingRectangleLeft
+                    row, boundingRectangleRight
+
+            |]
+            |> Array.except trenchEdgeCoords
+
+        let adjacentSquares (row, col) = [|
+            if row > boundingRectangleTop then row - 1, col
+            if row < boundingRectangleBottom then row + 1, col
+            if col > boundingRectangleLeft then row, col - 1
+            if col < boundingRectangleRight then row, col + 1
+        |]
+
+        ([||], exteriorSquaresOnRectangleEdge)
+        |> Array.unfold (fun (earlierExteriorSquares, previousExteriorSquares) ->
+
+            let exteriorSquaresSoFar = Array.append previousExteriorSquares earlierExteriorSquares
+
+            let nextExteriorSquares =
+                previousExteriorSquares
+                |> Array.collect adjacentSquares
+                |> Array.except exteriorSquaresSoFar
+                |> Array.except trenchEdgeCoords
+
+            match nextExteriorSquares with
+            | [||] -> None
+            | ss -> Some (Array.append ss exteriorSquaresSoFar, (exteriorSquaresSoFar, ss)))
+
+        |> Array.last
+
+    let solve plan =
+
+        let trenchEdgeCoords = plan |> calculateEdgeCoords
+
+        let boundingRectangleTop, boundingRectangleBottom, boundingRectangleLeft, boundingRectangleRight =
+            let rows = trenchEdgeCoords |> Seq.map fst
+            let cols = trenchEdgeCoords |> Seq.map snd
+            rows |> Seq.min, rows |> Seq.max, cols |> Seq.min, cols |> Seq.max
+
+        let exteriorSquares =
+            calculateExteriorSquares
+                trenchEdgeCoords
+                (boundingRectangleTop, boundingRectangleBottom, boundingRectangleLeft, boundingRectangleRight)
+
+        // Return bounding rectangle area less number of exterior squares.
+        ((boundingRectangleRight - boundingRectangleLeft + 1) |> int64)
+        * ((boundingRectangleBottom - boundingRectangleTop + 1) |> int64)
+        - exteriorSquares.LongLength
+
     module PartOne =
 
         let parseLines (lines: string array) =
@@ -1974,85 +2052,29 @@ module Day18 =
                     Metres = parts.[1] |> Int32.Parse
                 })
 
-        let calculateEdgeCoords plan =
-            ([| (0, 0) |], plan)
-            ||> Array.fold (fun edgeCoords step ->
+        let solve lines = lines |> parseLines |> solve
 
-                let row, col = edgeCoords |> Array.last
+    module PartTwo =
 
-                let newCoords =
-                    match step.Direction with
-                    | Up -> [| 1 .. step.Metres |] |> Array.map (fun i -> (row - i, col))
-                    | Down -> [| 1 .. step.Metres |] |> Array.map (fun i -> (row + i, col))
-                    | Left -> [| 1 .. step.Metres |] |> Array.map (fun i -> (row, col - i))
-                    | Right -> [| 1 .. step.Metres |] |> Array.map (fun i -> (row, col + i))
+        let parseLines (lines: string array) =
+            lines
+            |> Array.map (fun line ->
+                let parts = line.Split(' ')
+                let hexCode = parts.[2].Substring(2, 5)
+                let dirCode = parts.[2].[7]
+                {
+                    Direction =
+                        match dirCode with
+                        | '0' -> Right
+                        | '1' -> Down
+                        | '2' -> Left
+                        | '3' -> Up
+                        | c -> failwith $"Invalid direction code %c{c}"
+                    Metres = Convert.ToInt32(hexCode, 16)
+                })
 
-                Array.append edgeCoords newCoords)
+        let solve lines = lines |> parseLines |> solve
 
-        // Uses breadth-first search to determine squares outside the trench.
-        let calculateExteriorSquares
-            trenchEdgeCoords
-            (boundingRectangleTop, boundingRectangleBottom, boundingRectangleLeft, boundingRectangleRight)
-            =
-
-            let exteriorSquaresOnRectangleEdge =
-                [|
-
-                    for col in boundingRectangleLeft .. boundingRectangleRight do
-                        boundingRectangleTop, col
-                        boundingRectangleBottom, col
-
-                    for row in boundingRectangleTop .. boundingRectangleBottom do
-                        row, boundingRectangleLeft
-                        row, boundingRectangleRight
-
-                |]
-                |> Array.except trenchEdgeCoords
-
-            let adjacentSquares (row, col) = [|
-                if row > boundingRectangleTop then row - 1, col
-                if row < boundingRectangleBottom then row + 1, col
-                if col > boundingRectangleLeft then row, col - 1
-                if col < boundingRectangleRight then row, col + 1
-            |]
-
-            ([||], exteriorSquaresOnRectangleEdge)
-            |> Array.unfold (fun (earlierExteriorSquares, previousExteriorSquares) ->
-
-                let exteriorSquaresSoFar = Array.append previousExteriorSquares earlierExteriorSquares
-
-                let nextExteriorSquares =
-                    previousExteriorSquares
-                    |> Array.collect adjacentSquares
-                    |> Array.except exteriorSquaresSoFar
-                    |> Array.except trenchEdgeCoords
-
-                match nextExteriorSquares with
-                | [||] -> None
-                | ss -> Some (Array.append ss exteriorSquaresSoFar, (exteriorSquaresSoFar, ss)))
-
-            |> Array.last
-
-        let solve lines =
-
-            let trenchEdgeCoords = lines |> parseLines |> calculateEdgeCoords
-
-            let boundingRectangleTop, boundingRectangleBottom, boundingRectangleLeft, boundingRectangleRight =
-                let rows = trenchEdgeCoords |> Seq.map fst
-                let cols = trenchEdgeCoords |> Seq.map snd
-                rows |> Seq.min, rows |> Seq.max, cols |> Seq.min, cols |> Seq.max
-
-            let exteriorSquares =
-                calculateExteriorSquares
-                    trenchEdgeCoords
-                    (boundingRectangleTop, boundingRectangleBottom, boundingRectangleLeft, boundingRectangleRight)
-
-            // Return bounding rectangle area less number of exterior squares.
-            (boundingRectangleRight - boundingRectangleLeft + 1)
-            * (boundingRectangleBottom - boundingRectangleTop + 1)
-            - exteriorSquares.Length
-
-// FSI process has to run in same directory as this .fsx file for the relative path to work correctly.
 "./input/2023/day18"
 |> System.IO.File.ReadAllLines
-|> Day18.PartOne.solve
+|> Day18.PartTwo.solve
