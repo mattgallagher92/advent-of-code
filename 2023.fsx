@@ -377,7 +377,7 @@ module Day4 =
             {
                 Number = cardNumber
                 WinningNumbers = Set winningNumbers
-                NumbersYouHave =  Set numbersYouHave
+                NumbersYouHave = Set numbersYouHave
             }
         | Failure (error, _, _) ->
             failwith $"Failed to parse line (%s{error}): %s{line}"
