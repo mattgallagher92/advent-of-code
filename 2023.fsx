@@ -2184,6 +2184,122 @@ module Day18 =
 
             areaInRowsWithHorizontalEdges + areaInRowsBetweenHorizontalEdges
 
-"./input/2023/day18"
-|> System.IO.File.ReadAllLines
-|> Day18.PartTwo.solve
+module Day19 =
+
+    type Condition =
+        | LessThan of int
+        | GreaterThan of int
+
+    type ConditionalRule = {
+        Category: char
+        Condition: Condition
+        Destination: string
+    }
+
+    type Rule =
+        | Conditional of ConditionalRule
+        | Fallback of string
+
+    type Workflow = {
+        Name: string
+        Rules: Rule array
+    }
+
+    type Rating = {
+        X: int
+        M: int
+        A: int
+        S: int
+    }
+
+    let parseWorkflow (line: string) =
+
+        let openBraceIx = line |> Seq.findIndex ((=) '{')
+
+        {
+            Name = line.Substring(0, openBraceIx)
+            Rules =
+                line
+                    .Substring(openBraceIx + 1, line.Length - openBraceIx - 2)
+                    .Split(',')
+                |> Array.map (fun s ->
+                        match s |> Seq.tryFindIndex ((=) ':') with
+                        | Some colonIx ->
+                            let conditionType =
+                                match s.Chars 1 with
+                                | '<' -> LessThan
+                                | '>' -> GreaterThan
+                                | _ -> failwith "Invalid rule"
+                            {
+                                Category = s.Chars 0
+                                Condition = s.Substring(2, colonIx - 2) |> int |> conditionType
+                                Destination = s.Substring(colonIx + 1, s.Length - colonIx - 1)
+                            }
+                            |> Conditional
+                        | None ->
+                            Fallback s)
+        }
+
+    let parseRating (line: string) =
+        line.Substring(1, line.Length - 2)
+        |> (fun s ->
+            let parts = s.Split(',')
+            let x, m, a, s = parts.[0], parts.[1], parts.[2], parts.[3]
+            {
+                X = x.Substring(2, x.Length - 2) |> int
+                M = m.Substring(2, m.Length - 2) |> int
+                A = a.Substring(2, a.Length - 2) |> int
+                S = s.Substring(2, s.Length - 2) |> int
+            })
+
+    let parse (text: string) =
+        let tokens = text.Split("\n\n")
+        let workflows = tokens.[0].Split('\n') |> Array.map parseWorkflow
+        let ratings = tokens.[1].Split('\n') |> Array.filter (not << String.IsNullOrWhiteSpace) |> Array.map parseRating
+
+        workflows, ratings
+
+    let applyRule { X = x; M = m; A = a; S = s } =
+        function
+        | Conditional { Category = 'x'; Condition = LessThan i; Destination = d } -> if  x < i then Some d else None
+        | Conditional { Category = 'x'; Condition = GreaterThan i; Destination = d } -> if  x > i then Some d else None
+        | Conditional { Category = 'm'; Condition = LessThan i; Destination = d } -> if  m < i then Some d else None
+        | Conditional { Category = 'm'; Condition = GreaterThan i; Destination = d } -> if  m > i then Some d else None
+        | Conditional { Category = 'a'; Condition = LessThan i; Destination = d } -> if  a < i then Some d else None
+        | Conditional { Category = 'a'; Condition = GreaterThan i; Destination = d } -> if  a > i then Some d else None
+        | Conditional { Category = 's'; Condition = LessThan i; Destination = d } -> if  s < i then Some d else None
+        | Conditional { Category = 's'; Condition = GreaterThan i; Destination = d } -> if  s > i then Some d else None
+        | Conditional { Category = c } -> failwith $"Invalid rating category: %c{c}"
+        | Fallback d -> Some d
+
+    let ratingSum { X = x; M = m; A = a; S = s } = x + m + a + s
+
+    module PartOne =
+
+        let isAccepted workflows =
+
+            let rulesLookup = workflows |> Array.map (fun w -> w.Name, w.Rules) |> Map |> Collections.Generic.Dictionary
+
+            let rec inner workflowName rating =
+
+                rulesLookup.Item workflowName
+                |> Seq.choose (applyRule rating)
+                |> Seq.head
+                |> function
+                    | "A" -> true
+                    | "R" -> false
+                    | d -> inner d rating
+
+            inner "in"
+
+        let solve text =
+
+            let workflows, ratings = parse text
+
+            ratings
+            |> Array.filter (isAccepted workflows)
+            |> Array.sumBy ratingSum
+
+"./input/2023/day19"
+|> System.IO.File.ReadAllText
+|> Day19.PartOne.solve
