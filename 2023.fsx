@@ -2196,20 +2196,13 @@ module Day19 =
         Destination: string
     }
 
-    type Rule =
-        | Conditional of ConditionalRule
-        | Fallback of string
+    type Rules =
+        | Unconditional of string
+        | Conditional of ConditionalRule * Rules
 
     type Workflow = {
         Name: string
-        Rules: Rule array
-    }
-
-    type Rating = {
-        X: int
-        M: int
-        A: int
-        S: int
+        Rules: Rules
     }
 
     let parseWorkflow (line: string) =
@@ -2219,26 +2212,32 @@ module Day19 =
         {
             Name = line.Substring(0, openBraceIx)
             Rules =
-                line
-                    .Substring(openBraceIx + 1, line.Length - openBraceIx - 2)
-                    .Split(',')
-                |> Array.map (fun s ->
-                        match s |> Seq.tryFindIndex ((=) ':') with
-                        | Some colonIx ->
-                            let conditionType =
-                                match s.Chars 1 with
-                                | '<' -> LessThan
-                                | '>' -> GreaterThan
-                                | _ -> failwith "Invalid rule"
-                            {
-                                Category = s.Chars 0
-                                Condition = s.Substring(2, colonIx - 2) |> int |> conditionType
-                                Destination = s.Substring(colonIx + 1, s.Length - colonIx - 1)
-                            }
-                            |> Conditional
-                        | None ->
-                            Fallback s)
+                let strings =
+                    line
+                        .Substring(openBraceIx + 1, line.Length - openBraceIx - 2)
+                        .Split(',')
+                (strings.[ .. strings.Length - 2], strings |> Array.last |> Unconditional)
+                ||> Array.foldBack (fun s rule->
+                        let colonIx = s |> Seq.findIndex ((=) ':')
+                        let conditionType =
+                            match s.Chars 1 with
+                            | '<' -> LessThan
+                            | '>' -> GreaterThan
+                            | _ -> failwith "Invalid rule"
+                        {
+                            Category = s.Chars 0
+                            Condition = s.Substring(2, colonIx - 2) |> int |> conditionType
+                            Destination = s.Substring(colonIx + 1, s.Length - colonIx - 1)
+                        }
+                        |> fun conditional -> Conditional (conditional, rule))
         }
+
+    type Rating = {
+        X: int
+        M: int
+        A: int
+        S: int
+    }
 
     let parseRating (line: string) =
         line.Substring(1, line.Length - 2)
@@ -2258,23 +2257,32 @@ module Day19 =
         let ratings = tokens.[1].Split('\n') |> Array.filter (not << String.IsNullOrWhiteSpace) |> Array.map parseRating
 
         workflows, ratings
-
-    let applyRule { X = x; M = m; A = a; S = s } =
-        function
-        | Conditional { Category = 'x'; Condition = LessThan i; Destination = d } -> if  x < i then Some d else None
-        | Conditional { Category = 'x'; Condition = GreaterThan i; Destination = d } -> if  x > i then Some d else None
-        | Conditional { Category = 'm'; Condition = LessThan i; Destination = d } -> if  m < i then Some d else None
-        | Conditional { Category = 'm'; Condition = GreaterThan i; Destination = d } -> if  m > i then Some d else None
-        | Conditional { Category = 'a'; Condition = LessThan i; Destination = d } -> if  a < i then Some d else None
-        | Conditional { Category = 'a'; Condition = GreaterThan i; Destination = d } -> if  a > i then Some d else None
-        | Conditional { Category = 's'; Condition = LessThan i; Destination = d } -> if  s < i then Some d else None
-        | Conditional { Category = 's'; Condition = GreaterThan i; Destination = d } -> if  s > i then Some d else None
-        | Conditional { Category = c } -> failwith $"Invalid rating category: %c{c}"
-        | Fallback d -> Some d
-
-    let ratingSum { X = x; M = m; A = a; S = s } = x + m + a + s
-
     module PartOne =
+
+        let rec applyRule ({ X = x; M = m; A = a; S = s } as rating) =
+            function
+            | Unconditional d ->
+                d
+            | Conditional ({ Category = 'x'; Condition = LessThan i; Destination = d }, next) ->
+                if x < i then d else applyRule rating next
+            | Conditional ({ Category = 'x'; Condition = GreaterThan i; Destination = d }, next) ->
+                if x > i then d else applyRule rating next
+            | Conditional ({ Category = 'm'; Condition = LessThan i; Destination = d }, next) ->
+                if m < i then d else applyRule rating next
+            | Conditional ({ Category = 'm'; Condition = GreaterThan i; Destination = d }, next) ->
+                if m > i then d else applyRule rating next
+            | Conditional ({ Category = 'a'; Condition = LessThan i; Destination = d }, next) ->
+                if a < i then d else applyRule rating next
+            | Conditional ({ Category = 'a'; Condition = GreaterThan i; Destination = d }, next) ->
+                if a > i then d else applyRule rating next
+            | Conditional ({ Category = 's'; Condition = LessThan i; Destination = d }, next) ->
+                if s < i then d else applyRule rating next
+            | Conditional ({ Category = 's'; Condition = GreaterThan i; Destination = d }, next) ->
+                if s > i then d else applyRule rating next
+            | Conditional ({ Category = c }, _) ->
+                failwith $"Invalid rating category: %c{c}"
+
+        let ratingSum { X = x; M = m; A = a; S = s } = x + m + a + s
 
         let isAccepted workflows =
 
@@ -2283,8 +2291,7 @@ module Day19 =
             let rec inner workflowName rating =
 
                 rulesLookup.Item workflowName
-                |> Seq.choose (applyRule rating)
-                |> Seq.head
+                |> applyRule rating
                 |> function
                     | "A" -> true
                     | "R" -> false
