@@ -2307,6 +2307,112 @@ module Day19 =
             |> Array.filter (isAccepted workflows)
             |> Array.sumBy ratingSum
 
+    module PartTwo =
+
+        type RatingRange = {
+            XMin: int
+            XMax: int
+            MMin: int
+            MMax: int
+            AMin: int
+            AMax: int
+            SMin: int
+            SMax: int
+        }
+
+        module RatingRange =
+
+            let min category range =
+                match category with
+                | 'x' -> range.XMin
+                | 'm' -> range.MMin
+                | 'a' -> range.AMin
+                | 's' -> range.SMin
+                | c -> failwith $"Invalid category %c{c}"
+
+            let max category range =
+                match category with
+                | 'x' -> range.XMax
+                | 'm' -> range.MMax
+                | 'a' -> range.AMax
+                | 's' -> range.SMax
+                | c -> failwith $"Invalid category %c{c}"
+
+            let updateMin category newMin range =
+                match category with
+                | 'x' -> { range with XMin = newMin }
+                | 'm' -> { range with MMin = newMin }
+                | 'a' -> { range with AMin = newMin }
+                | 's' -> { range with SMin = newMin }
+                | c -> failwith $"Invalid category %c{c}"
+
+            let updateMax category newMax range =
+                match category with
+                | 'x' -> { range with XMax = newMax }
+                | 'm' -> { range with MMax = newMax }
+                | 'a' -> { range with AMax = newMax }
+                | 's' -> { range with SMax = newMax }
+                | c -> failwith $"Invalid category %c{c}"
+
+            let rec split rules range =
+
+                match rules with
+                | Unconditional d ->
+                    seq { range, d }
+
+                | Conditional ({ Category = cat; Condition = LessThan i; Destination = d }, next) ->
+
+                    let matching =
+                        let oldMax = max cat range
+                        let newMax = Math.Min(oldMax, i - 1)
+                        range |> updateMax cat newMax
+
+                    let nonMatching =
+                        let oldMin = min cat range
+                        let newMin = Math.Max(oldMin, i)
+                        range |> updateMin cat newMin
+
+                    seq { matching, d; yield! split next nonMatching }
+
+                | Conditional ({ Category = cat; Condition = GreaterThan i; Destination = d }, next) ->
+
+                    let matching =
+                        let oldMin = min cat range
+                        let newMin = Math.Max(oldMin, i + 1)
+                        range |> updateMin cat newMin
+
+                    let nonMatching =
+                        let oldMax = max cat range
+                        let newMax = Math.Min(oldMax, i)
+                        range |> updateMax cat newMax
+
+                    seq { matching, d; yield! split next nonMatching }
+
+            let count range =
+                ((range.XMax - range.XMin + 1) |> int64)
+                * ((range.MMax - range.MMin + 1) |> int64)
+                * ((range.AMax - range.AMin + 1) |> int64)
+                * ((range.SMax - range.SMin + 1) |> int64)
+
+        let acceptedRanges workflows =
+
+            let rulesLookup = workflows |> Array.map (fun w -> w.Name, w.Rules) |> Map |> Collections.Generic.Dictionary
+
+            let rec inner (range: RatingRange) =
+                function
+                | "A" -> seq { range }
+                | "R" -> Seq.empty
+                | workflowName ->
+                    let rules = rulesLookup.Item workflowName
+                    range |> RatingRange.split rules
+                    |> Seq.collect (fun (r, n) -> inner r n)
+
+            ({ XMin = 1; XMax = 4000; MMin = 1; MMax = 4000; AMin = 1; AMax = 4000; SMin = 1; SMax = 4000 }, "in")
+            ||> inner
+            |> Seq.sumBy RatingRange.count
+
+        let solve text = text |> parse |> fst |> acceptedRanges
+
 "./input/2023/day19"
 |> System.IO.File.ReadAllText
-|> Day19.PartOne.solve
+|> Day19.PartTwo.solve
