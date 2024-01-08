@@ -2437,14 +2437,14 @@ module Day20 =
 
     type ConjunctionModule =
         {
-            InputPulses: Pulse array
+            InputPulses: Map<string, Pulse>
         }
 
-        member this.HandleInput inputIx pulse =
-            let newInputs = this.InputPulses |> Array.updateAt inputIx pulse
+        member this.HandleInput connectionLabel pulse =
+            let newInputs = this.InputPulses |> Map.add connectionLabel pulse
 
             let output =
-                if newInputs |> Array.forall ((=) HighPulse) then
+                if newInputs |> Map.forall (fun _ pulse -> pulse = HighPulse) then
                     LowPulse
                 else
                     HighPulse
@@ -2460,71 +2460,87 @@ module Day20 =
 
         let newFlipFlop = FlipFlop { IsOn = false }
 
-        let newConjunction inputCount = Conjunction { InputPulses = Array.create inputCount LowPulse }
+        let newConjunction connectionLabels =
+            Conjunction { InputPulses = connectionLabels |> Seq.map (fun l -> l, LowPulse) |> Map }
 
-        let handleInput inputIx pulse =
+        let handleInput outputLabel pulse =
             function
             | FlipFlop ff ->
                 let newState, output = ff.HandleInput pulse
                 FlipFlop newState, output
             | Conjunction c ->
-                let newState, output = c.HandleInput inputIx pulse
+                let newState, output = c.HandleInput outputLabel pulse
                 Conjunction newState, Some output
             | Broadcast ->
                 Broadcast, Some pulse
 
-    type InputConnection = {
+    type Connection = {
+        /// The label of the module whose output the connection attaches to.
+        OutputLabel: string
         /// The label of the module whose input the connection attaches to.
-        Label: string
-        /// The index of the input that the connection attaches to, amongst the module's inputs.
-        Ix: int
+        InputLabel: string
     }
+
+    /// Given a configuration before a button press, returns the configuration after the pulses have stopped being
+    /// sent, and a list of sent pulses that were sent paired with the connections that they were sent on.
+    let handleButtonPress (configuration: Dictionary<string, Module * Connection array>) =
+
+        let newConfig = Dictionary(configuration)
+
+        let queue = Queue<Pulse * Connection>()
+
+        let tryDequeue () =
+            match queue.TryDequeue() with
+            | true, item -> Some item
+            | false, _ -> None
+
+        queue.Enqueue(LowPulse, { OutputLabel = "button"; InputLabel = "broadcaster" })
+
+        let signals =
+            ()
+            |> List.unfold (fun _ ->
+                tryDequeue ()
+                |> Option.map (fun item ->
+
+                    let pulse, { OutputLabel = outputLabel; InputLabel = inputLabel } = item
+                    let module', outputConnections = newConfig.[inputLabel]
+
+                    let module'', output = module' |> Module.handleInput outputLabel pulse
+
+                    newConfig.[inputLabel] <- (module'', outputConnections)
+
+                    output
+                    |> Option.iter (fun output ->
+                        outputConnections
+                        |> Array.iter (fun conn -> queue.Enqueue(output, conn)))
+
+                    item, ()))
+
+        newConfig, signals
+
+    // let parse (lines: string array) =
+    //     lines
+    //     |> Array.map (fun line ->
+    //         let parts = line.Split(" -> ")
+    //     )
 
     module PartOne =
 
-        let handleButtonPress (configuration: Dictionary<string, Module * InputConnection array>) =
-
-            let newConfig = Dictionary(configuration)
-
-            let pulses = Queue<Pulse * InputConnection>()
-            pulses.Enqueue(LowPulse, { Label = "broadcaster"; Ix = 0 })
-
-            let hasPulses () = pulses.TryPeek() |> fst
-
-            while hasPulses () do
-
-                let inlineMe = pulses.Dequeue()
-                printfn $"%A{inlineMe}"
-
-                let pulse, { Label = label; Ix = inputIx } = inlineMe
-                let module', outputConnections = newConfig.[label]
-
-                let module'', output = module' |> Module.handleInput inputIx pulse
-
-                newConfig.[label] <- (module'', outputConnections)
-
-                output
-                |> Option.iter (fun output ->
-                    outputConnections
-                    |> Array.iter (fun conn -> pulses.Enqueue(output, conn)))
-
-            newConfig
-
         let solve (lines: string array) =
 
-            let dict = Dictionary<string, Module * InputConnection array>()
+            let dict = Dictionary<string, Module * Connection array>()
 
             dict.Add("broadcaster", (Broadcast, [|
-                { Label = "a"; Ix = 0 }
-                { Label = "b"; Ix = 0 }
-                { Label = "c"; Ix = 0 }
+                { OutputLabel = "broadcaster"; InputLabel = "a" }
+                { OutputLabel = "broadcaster"; InputLabel = "b" }
+                { OutputLabel = "broadcaster"; InputLabel = "c" }
             |]))
 
-            dict.Add("a", (Module.newFlipFlop, [| { Label = "b"; Ix = 0 } |]))
-            dict.Add("b", (Module.newFlipFlop, [| { Label = "c"; Ix = 0 } |]))
-            dict.Add("c", (Module.newFlipFlop, [| { Label = "inv"; Ix = 0 } |]))
+            dict.Add("a", (Module.newFlipFlop, [| { OutputLabel = "a"; InputLabel = "b" } |]))
+            dict.Add("b", (Module.newFlipFlop, [| { OutputLabel = "b"; InputLabel = "c" } |]))
+            dict.Add("c", (Module.newFlipFlop, [| { OutputLabel = "c"; InputLabel = "inv" } |]))
 
-            dict.Add("inv", (Module.newConjunction 1, [| { Label = "a"; Ix = 0 } |]))
+            dict.Add("inv", (Module.newConjunction [| "c" |], [| { OutputLabel = "inv"; InputLabel = "a" } |]))
 
             handleButtonPress dict
 
