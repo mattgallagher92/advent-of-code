@@ -2413,6 +2413,121 @@ module Day19 =
 
         let solve text = text |> parse |> fst |> acceptedRanges
 
-"./input/2023/day19"
-|> System.IO.File.ReadAllText
-|> Day19.PartTwo.solve
+module Day20 =
+    open System.Collections.Generic
+
+    type Pulse =
+        | LowPulse
+        | HighPulse
+
+    type FlipFlopModule =
+        {
+            IsOn: bool
+        }
+
+        member this.HandleInput =
+            function
+            | LowPulse ->
+                let nowOn = not this.IsOn
+                let output = if nowOn then HighPulse else LowPulse
+                { IsOn = nowOn }, Some output
+            | HighPulse  ->
+                this, None
+
+
+    type ConjunctionModule =
+        {
+            InputPulses: Pulse array
+        }
+
+        member this.HandleInput inputIx pulse =
+            let newInputs = this.InputPulses |> Array.updateAt inputIx pulse
+
+            let output =
+                if newInputs |> Array.forall ((=) HighPulse) then
+                    LowPulse
+                else
+                    HighPulse
+
+            { InputPulses = newInputs },  output
+
+    type Module =
+        | FlipFlop of FlipFlopModule
+        | Conjunction of ConjunctionModule
+        | Broadcast
+
+    module Module =
+
+        let newFlipFlop = FlipFlop { IsOn = false }
+
+        let newConjunction inputCount = Conjunction { InputPulses = Array.create inputCount LowPulse }
+
+        let handleInput inputIx pulse =
+            function
+            | FlipFlop ff ->
+                let newState, output = ff.HandleInput pulse
+                FlipFlop newState, output
+            | Conjunction c ->
+                let newState, output = c.HandleInput inputIx pulse
+                Conjunction newState, Some output
+            | Broadcast ->
+                Broadcast, Some pulse
+
+    type InputConnection = {
+        /// The label of the module whose input the connection attaches to.
+        Label: string
+        /// The index of the input that the connection attaches to, amongst the module's inputs.
+        Ix: int
+    }
+
+    module PartOne =
+
+        let handleButtonPress (configuration: Dictionary<string, Module * InputConnection array>) =
+
+            let newConfig = Dictionary(configuration)
+
+            let pulses = Queue<Pulse * InputConnection>()
+            pulses.Enqueue(LowPulse, { Label = "broadcaster"; Ix = 0 })
+
+            let hasPulses () = pulses.TryPeek() |> fst
+
+            while hasPulses () do
+
+                let inlineMe = pulses.Dequeue()
+                printfn $"%A{inlineMe}"
+
+                let pulse, { Label = label; Ix = inputIx } = inlineMe
+                let module', outputConnections = newConfig.[label]
+
+                let module'', output = module' |> Module.handleInput inputIx pulse
+
+                newConfig.[label] <- (module'', outputConnections)
+
+                output
+                |> Option.iter (fun output ->
+                    outputConnections
+                    |> Array.iter (fun conn -> pulses.Enqueue(output, conn)))
+
+            newConfig
+
+        let solve (lines: string array) =
+
+            let dict = Dictionary<string, Module * InputConnection array>()
+
+            dict.Add("broadcaster", (Broadcast, [|
+                { Label = "a"; Ix = 0 }
+                { Label = "b"; Ix = 0 }
+                { Label = "c"; Ix = 0 }
+            |]))
+
+            dict.Add("a", (Module.newFlipFlop, [| { Label = "b"; Ix = 0 } |]))
+            dict.Add("b", (Module.newFlipFlop, [| { Label = "c"; Ix = 0 } |]))
+            dict.Add("c", (Module.newFlipFlop, [| { Label = "inv"; Ix = 0 } |]))
+
+            dict.Add("inv", (Module.newConjunction 1, [| { Label = "a"; Ix = 0 } |]))
+
+            handleButtonPress dict
+
+"./input/2023/day20"
+|> System.IO.File.ReadAllLines
+|> Day20.PartOne.solve
