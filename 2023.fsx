@@ -2437,6 +2437,7 @@ module Day20 =
 
     type ConjunctionModule =
         {
+            // TODO: map might be slow with lots of connectoins. Consider dictionary.
             InputPulses: Map<string, Pulse>
         }
 
@@ -2460,8 +2461,8 @@ module Day20 =
 
         let newFlipFlop = FlipFlop { IsOn = false }
 
-        let newConjunction connectionLabels =
-            Conjunction { InputPulses = connectionLabels |> Seq.map (fun l -> l, LowPulse) |> Map }
+        let newConjunction inputConnectionLabels =
+            Conjunction { InputPulses = inputConnectionLabels |> Seq.map (fun l -> l, LowPulse) |> Map }
 
         let handleInput outputLabel pulse =
             function
@@ -2518,31 +2519,57 @@ module Day20 =
 
         newConfig, signals
 
-    // let parse (lines: string array) =
-    //     lines
-    //     |> Array.map (fun line ->
-    //         let parts = line.Split(" -> ")
-    //     )
+    // TODO: build up dictionaries more functionally by making maps then converting to dictionaries?
+    let parse (lines: string array) =
+
+        // Turn into more structured data.
+        let data =
+            lines
+            |> Array.map (fun line ->
+                let parts = line.Split(" -> ")
+                let typeSignifier, moduleLabel =
+                    match parts.[0].[0] with
+                    | '%' -> Some '%', parts.[0].[ 1 .. ]
+                    | '&' -> Some '&', parts.[0].[ 1 .. ]
+                    | _ -> None, parts.[0]
+                let outputConnectionLabels = parts.[1].Split(", ")
+                moduleLabel, typeSignifier, outputConnectionLabels)
+
+        // First pass to build up map from module label to input labels.
+        let toInputLabels = Dictionary<string, string list>()
+        data
+        |> Array.iter (fun (moduleLabel, _, outputConnectionLabels) ->
+            outputConnectionLabels
+            |> Array.iter (fun outputLabel ->
+                let registered = toInputLabels.TryGet outputLabel |> Option.defaultValue []
+                toInputLabels.[outputLabel] <- moduleLabel :: registered))
+
+        // Second pass to create config using map.
+        let config = Dictionary<string, Module * Connection array>()
+
+        data
+        |> Array.iter (fun (moduleLabel, typeSignifier, outputConnectionLabels) ->
+
+            let module' =
+                match typeSignifier with
+                | Some '%' -> Module.newFlipFlop
+                | Some '&' -> Module.newConjunction (toInputLabels.[moduleLabel] |> List.toArray)
+                | Some _ -> failwith "Bug"
+                | None -> Broadcast
+
+            let connections =
+                outputConnectionLabels |> Array.map (fun l -> { OutputLabel = moduleLabel; InputLabel = l })
+
+            config.Add(moduleLabel, (module', connections)))
+
+        config
 
     module PartOne =
 
         let solve (lines: string array) =
-
-            let dict = Dictionary<string, Module * Connection array>()
-
-            dict.Add("broadcaster", (Broadcast, [|
-                { OutputLabel = "broadcaster"; InputLabel = "a" }
-                { OutputLabel = "broadcaster"; InputLabel = "b" }
-                { OutputLabel = "broadcaster"; InputLabel = "c" }
-            |]))
-
-            dict.Add("a", (Module.newFlipFlop, [| { OutputLabel = "a"; InputLabel = "b" } |]))
-            dict.Add("b", (Module.newFlipFlop, [| { OutputLabel = "b"; InputLabel = "c" } |]))
-            dict.Add("c", (Module.newFlipFlop, [| { OutputLabel = "c"; InputLabel = "inv" } |]))
-
-            dict.Add("inv", (Module.newConjunction [| "c" |], [| { OutputLabel = "inv"; InputLabel = "a" } |]))
-
-            handleButtonPress dict
+            lines
+            |> parse
+            |> handleButtonPress
 
 "./input/2023/day20"
 |> System.IO.File.ReadAllLines
