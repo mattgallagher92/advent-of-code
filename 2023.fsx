@@ -2586,6 +2586,26 @@ module Day20 =
             |> Seq.map snd
             |> Seq.reduce (*)
 
+    module PartTwo =
+
+        let solve lines =
+
+            let mutable config = lines |> parse
+            let mutable rxReceivedLowPulse = false
+            let mutable buttonPressCount = 0
+
+            while not rxReceivedLowPulse do
+
+                let newConfig, signals = config |> handleButtonPress
+
+                buttonPressCount <- buttonPressCount + 1
+                config <- newConfig
+                rxReceivedLowPulse <-
+                    signals
+                    |> List.exists (fun (pulse, connection) -> pulse = LowPulse && connection.InputLabel = "rx")
+
+            buttonPressCount
+
 "./input/2023/day20"
 |> System.IO.File.ReadAllLines
-|> Day20.PartOne.solve
+|> Day20.PartTwo.solve
