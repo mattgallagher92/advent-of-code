@@ -2436,7 +2436,6 @@ module Day20 =
 
     type ConjunctionModule =
         {
-            // TODO: map might be slow with lots of connections. Consider dictionary.
             InputPulses: Map<string, Pulse>
         }
 
@@ -2546,22 +2545,25 @@ module Day20 =
             |> Dictionary
 
         // Second pass to create config using map.
-        data
-        |> Array.map (fun (moduleLabel, typeSignifier, outputConnectionLabels) ->
+        let config =
+            data
+            |> Array.map (fun (moduleLabel, typeSignifier, outputConnectionLabels) ->
 
-            let module' =
-                match typeSignifier with
-                | Some '%' -> Module.newFlipFlop
-                | Some '&' -> Module.newConjunction toInputLabels.[moduleLabel]
-                | Some _ -> failwith "Bug"
-                | None -> Broadcast
+                let module' =
+                    match typeSignifier with
+                    | Some '%' -> Module.newFlipFlop
+                    | Some '&' -> Module.newConjunction toInputLabels.[moduleLabel]
+                    | Some _ -> failwith "Bug"
+                    | None -> Broadcast
 
-            let connections =
-                outputConnectionLabels |> Array.map (fun l -> { OutputLabel = moduleLabel; InputLabel = l })
+                let connections =
+                    outputConnectionLabels |> Array.map (fun l -> { OutputLabel = moduleLabel; InputLabel = l })
 
-            moduleLabel, (module', connections))
-        |> Map
-        |> Dictionary
+                moduleLabel, (module', connections))
+            |> Map
+            |> Dictionary
+
+        config, toInputLabels
 
     module PartOne =
 
@@ -2579,7 +2581,7 @@ module Day20 =
 
         let solve lines =
 
-            let pulses = lines |> parse |> handleNButtonPresses 1000 |> snd |> Array.map fst
+            let pulses = lines |> parse |> fst |> handleNButtonPresses 1000 |> snd |> Array.map fst
 
             pulses
             |> Seq.countBy id
@@ -2588,23 +2590,55 @@ module Day20 =
 
     module PartTwo =
 
-        let solve lines =
+        /// Returns the first index of a button press resulting in a low pulse being input to the module with the given
+        /// label, provided that the first ten such indices are all divisible by the first.
+        let lowPulseButtonPressIndexPatterns config label =
 
-            let mutable config = lines |> parse
-            let mutable rxReceivedLowPulse = false
-            let mutable buttonPressCount = 0
-
-            while not rxReceivedLowPulse do
+            let rec inner lowPulseIndices buttonPressCount config =
 
                 let newConfig, signals = config |> handleButtonPress
+                let newCount = buttonPressCount + 1
 
-                buttonPressCount <- buttonPressCount + 1
-                config <- newConfig
-                rxReceivedLowPulse <-
+                let receivedLowPulse =
                     signals
-                    |> List.exists (fun (pulse, connection) -> pulse = LowPulse && connection.InputLabel = "rx")
+                    |> List.exists (fun (pulse, connection) -> pulse = LowPulse && connection.InputLabel = label)
 
-            buttonPressCount
+                match receivedLowPulse, lowPulseIndices |> List.length with
+                | true, 9 ->
+                    let inOrder = lowPulseIndices |> List.rev
+                    let smallest = inOrder |> List.head
+                    if inOrder |> List.forall (fun i -> i % smallest = 0) then
+                        smallest
+                    else
+                        failwith $"Button press indices resulting in low pulses to %s{label} aren't cyclic: %A{inOrder}"
+                | true, _ ->
+                    inner (newCount :: lowPulseIndices) newCount newConfig
+                | false, _ ->
+                    inner lowPulseIndices newCount newConfig
+
+            inner [] 0 config
+
+        // Note: this solution isn't generic - it makes various assumptions about the input that are true for the input
+        // that I have (and I suspect all inputs). If those assumptions do not hold, this function will fail with an
+        // exception.
+        let solve lines =
+
+            let config, toInputLabels = lines |> parse
+
+            let outputtingToRxLabel =
+                match toInputLabels.["rx"] with
+                | [| label |] -> label
+                | labels -> failwith $"%A{labels} all output to rx, breaking assumption that there is only one."
+
+            let outputtingToRxPredecessor =
+                match config.[outputtingToRxLabel] with
+                | Conjunction module', _ -> module'.InputPulses.Keys
+                | _ -> failwith "The module outputting to rx is assumed to be a conjunction module."
+
+            outputtingToRxPredecessor
+            |> Seq.map (lowPulseButtonPressIndexPatterns config)
+            |> Seq.map uint64
+            |> Seq.reduce Math.lcm
 
 "./input/2023/day20"
 |> System.IO.File.ReadAllLines
