@@ -2640,6 +2640,58 @@ module Day20 =
             |> Seq.map uint64
             |> Seq.reduce Math.lcm
 
-"./input/2023/day20"
+module Day21 =
+
+    module PartOne =
+
+        let solve (lines: string array) =
+
+            let startingPosition =
+                lines
+                |> Seq.mapi (fun row line -> row, line.IndexOf('S'))
+                |> Seq.find (fun (_, col) -> col > -1)
+
+            let map = lines |> array2D
+
+            let adjacentGardenPlots (row, col) =
+                seq { row - 1, col; row, col - 1; row, col + 1; row + 1, col }
+                |> Seq.filter (fun (r, c) ->
+                    r > -1
+                    && r < Array2D.length1 map
+                    && c > -1
+                    && c < Array2D.length2 map
+                    && Array2D.get map r c <> '#')
+
+            let plotsAtDistance =
+
+                let rec inner ((previousDistance, _) as previousPlots, closerPlots) =
+
+                    let plotsWithDistances = (closerPlots, [| previousPlots |]) ||> Array.append
+
+                    let nextPlots =
+
+                        let plotsAtLowerDistances = plotsWithDistances |> Array.collect snd
+
+                        plotsAtLowerDistances
+                        |> Seq.collect adjacentGardenPlots
+                        |> Seq.except plotsAtLowerDistances
+                        |> Seq.toArray
+
+                    if nextPlots |> Array.isEmpty then
+                        plotsWithDistances
+                    else
+                        inner (((previousDistance + 1), nextPlots), plotsWithDistances)
+
+                inner ((0, [| startingPosition |]), [||])
+
+            let targetSteps = 64
+
+            plotsAtDistance
+            // Can double back to get to plots with a lower distance where the difference is even.
+            |> Array.filter (fun (distance, _) -> targetSteps - distance >= 0 && (targetSteps - distance) % 2 = 0)
+            |> Array.collect snd
+            |> Array.length
+
+"./input/2023/day21"
 |> System.IO.File.ReadAllLines
-|> Day20.PartTwo.solve
+|> Day21.PartOne.solve
