@@ -2642,51 +2642,61 @@ module Day20 =
 
 module Day21 =
 
+    let parse (lines: string array) =
+
+        let startingPosition =
+            lines
+            |> Seq.mapi (fun row line -> row, line.IndexOf('S'))
+            |> Seq.find (fun (_, col) -> col > -1)
+
+        let map = lines |> array2D
+
+        map, startingPosition
+
+    /// Given a map and position, returns the garden plots in the map that are adjacent to that position.
+    let adjacentGardenPlots map (row, col) =
+        seq { row - 1, col; row, col - 1; row, col + 1; row + 1, col }
+        |> Seq.filter (fun (r, c) ->
+            r > -1
+            && r < Array2D.length1 map
+            && c > -1
+            && c < Array2D.length2 map
+            && Array2D.get map r c <> '#')
+
+    /// Given a map and a position, returns an array of pairs whose first element is a distance from that position and
+    /// whose second element is an array containing the positions that are garden plots at that distance from the
+    /// given position.
+    let plotsAtDistanceFrom map position =
+
+        let rec inner (previousDistance, _ as previousPlots, closerPlots) =
+
+            let plotsWithDistances = (closerPlots, [| previousPlots |]) ||> Array.append
+
+            let nextPlots =
+
+                let plotsAtLowerDistances = plotsWithDistances |> Array.collect snd
+
+                plotsAtLowerDistances
+                |> Seq.collect (adjacentGardenPlots map)
+                |> Seq.except plotsAtLowerDistances
+                |> Seq.toArray
+
+            if nextPlots |> Array.isEmpty then
+                plotsWithDistances
+            else
+                inner (((previousDistance + 1), nextPlots), plotsWithDistances)
+
+        inner ((0, [| position |]), [||])
+
     module PartOne =
 
-        let solve (lines: string array) =
-
-            let startingPosition =
-                lines
-                |> Seq.mapi (fun row line -> row, line.IndexOf('S'))
-                |> Seq.find (fun (_, col) -> col > -1)
-
-            let map = lines |> array2D
-
-            let adjacentGardenPlots (row, col) =
-                seq { row - 1, col; row, col - 1; row, col + 1; row + 1, col }
-                |> Seq.filter (fun (r, c) ->
-                    r > -1
-                    && r < Array2D.length1 map
-                    && c > -1
-                    && c < Array2D.length2 map
-                    && Array2D.get map r c <> '#')
-
-            let plotsAtDistance =
-
-                let rec inner ((previousDistance, _) as previousPlots, closerPlots) =
-
-                    let plotsWithDistances = (closerPlots, [| previousPlots |]) ||> Array.append
-
-                    let nextPlots =
-
-                        let plotsAtLowerDistances = plotsWithDistances |> Array.collect snd
-
-                        plotsAtLowerDistances
-                        |> Seq.collect adjacentGardenPlots
-                        |> Seq.except plotsAtLowerDistances
-                        |> Seq.toArray
-
-                    if nextPlots |> Array.isEmpty then
-                        plotsWithDistances
-                    else
-                        inner (((previousDistance + 1), nextPlots), plotsWithDistances)
-
-                inner ((0, [| startingPosition |]), [||])
+        let solve lines =
 
             let targetSteps = 64
 
-            plotsAtDistance
+            let map, startingPosition = parse lines
+
+            plotsAtDistanceFrom map startingPosition
             // Can double back to get to plots with a lower distance where the difference is even.
             |> Array.filter (fun (distance, _) -> targetSteps - distance >= 0 && (targetSteps - distance) % 2 = 0)
             |> Array.collect snd
