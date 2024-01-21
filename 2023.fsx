@@ -2690,9 +2690,7 @@ module Day21 =
 
     module PartOne =
 
-        let solve lines =
-
-            let targetSteps = 64
+        let solve targetSteps lines =
 
             let map, startingPosition = parse lines
 
@@ -2702,6 +2700,475 @@ module Day21 =
             |> Array.collect snd
             |> Array.length
 
+    /// Makes some simplifying assumptions, which apply to the puzzle input I have:
+    /// - The edge rows and columns contain only garden plots.
+    /// - The central rows and columns contain only garden plots.
+    /// - The map is a square whose side length is odd.
+    /// - The starting position is in the centre of the map.
+    module PartTwo =
+
+        let parse lines =
+
+            let map, startingPosition = parse lines
+            let h, w = map |> Array2D.length1, map |> Array2D.length2
+            if h <> w then
+                failwith $"Broken assumption: height %i{h} is not equal to width %i{w}."
+            elif h % 2 = 0 then
+                failwith $"Broken assumption: side length %i{h} is not odd."
+            elif startingPosition <> (h / 2, w / 2) then
+                failwith $"Broken assumption: starting position %A{startingPosition} is not in the centre of the map."
+            else
+                let expectedGardenPlots =
+                    [| 0 .. h - 1 |]
+                    |> Array.collect (fun i -> [| 0, i; h / 2, i; h - 1, i; i, 0; i, h / 2; i, h - 1 |])
+
+                match expectedGardenPlots |> Array.tryFind (fun (row, col) -> Array2D.get map row col = '#') with
+                | Some (row, col) ->
+                    failwith $"Broken assumption: square in edge or central row or column, (%i{row}, %i{col}) is not a garden plot"
+                | None ->
+                    map
+
+        /// First elements in pairs are distances, second is the count of plots at that distance.
+        type DistanceCounts = {
+            FromCentre: (int * int) array
+            FromEast: (int * int) array
+            FromNorthEast: (int * int) array
+            FromNorth: (int * int) array
+            FromNorthWest: (int * int) array
+            FromWest: (int * int) array
+            FromSouthWest: (int * int) array
+            FromSouth: (int * int) array
+            FromSouthEast: (int * int) array
+        }
+
+        // TODO: this is pretty slow!
+        /// Array of (distance, count) within a single map instance.
+        let calculateDistanceCounts map =
+
+            let mapSideLength = map |> Array2D.length1
+            let centre = mapSideLength / 2
+            let end' = mapSideLength - 1
+
+            let calculate = plotsAtDistanceFrom map >> Array.map (fun (d, ps) -> d, Array.length ps)
+
+            {
+                FromCentre = calculate (centre, centre)
+                FromEast = calculate (centre, end')
+                FromNorthEast = calculate (0, end')
+                FromNorth = calculate (0, centre)
+                FromNorthWest = calculate (0, 0)
+                FromWest = calculate (centre, 0)
+                FromSouthWest = calculate (end', 0)
+                FromSouth = calculate (end', centre)
+                FromSouthEast = calculate (end', end')
+            }
+
+        /// Length in maps.
+        [<Measure>] type M
+
+        type MapProperties = {
+            /// How many plots are along a single edge of the map.
+            SideLength: int
+            /// Shortest distance from the start position in the centre map to a plot in another map.
+            DistanceToAnotherMap: int
+            /// How far away from the centre map the furthest inline map containing reachable plots is.
+            FurthestInlineMapDistance: int<M>
+            /// How far away from the centre map the furthest offset map containing reachable plots is.
+            FurthestOffsetMapDistance: int<M>
+        }
+
+        let calculateMapProperties targetSteps map =
+            let sideLength = map |> Array2D.length1
+            let distanceToAnotherMap = sideLength / 2 + 1
+            {
+                SideLength = sideLength
+                DistanceToAnotherMap = distanceToAnotherMap
+                FurthestInlineMapDistance = ((targetSteps - distanceToAnotherMap) / sideLength + 1) * 1<M>
+                FurthestOffsetMapDistance = ((targetSteps - 2 * distanceToAnotherMap) / sideLength + 2) * 1<M>
+            }
+
+        let private generateCountFunctions targetSteps =
+            // Can double back to get to plots with a lower distance where the difference is even.
+            let isMatch distance = targetSteps - distance >= 0 && (targetSteps - distance) % 2 = 0
+            let countMatches = Array.sumBy (fun (distance, count) -> if isMatch distance then int64 count else 0L)
+            let countNonMatches =
+                Array.sumBy (fun (distance, count) -> if not (isMatch distance) then int64 count else 0L)
+            countMatches, countNonMatches
+
+        /// Count of plots reachable at the target distance within the centre map.
+        let calculateCentreMapMatchingPlotsCount targetSteps distanceCounts =
+            let countMatches, _ = generateCountFunctions targetSteps
+            distanceCounts |> countMatches
+
+        /// Count of plots reachable at the target distance within maps that are due North, South, East or West of the
+        /// centre map and not on one of the two furthest such maps.
+        let calculateInteriorInlineMapsMatchingPlotsCount targetSteps map distanceCounts =
+
+            let countMatches, countNonMatches = generateCountFunctions targetSteps
+
+            let {
+                FurthestInlineMapDistance = furthestDistance
+                DistanceToAnotherMap = distanceToAnotherMap
+            } = calculateMapProperties targetSteps map
+
+            /// The number of inline maps in a single direction with reachable plots that are an even or odd distance,
+            /// respectively, from the central map, not including the last two.
+            let numEvenDistanceMaps, numOddDistanceMaps =
+                let z = (furthestDistance - 2<M>) * 1<1/M> |> int64
+                // Because the side length is assumed to be odd, the maps alternate distance parity.
+                match distanceToAnotherMap % 2 = 0, z % 2L = 0L with
+                | false, false -> z / 2L, (z + 1L) / 2L
+                | false, true -> z / 2L, z / 2L
+                | true, false -> (z + 1L) / 2L, z / 2L
+                | true, true -> z / 2L, z / 2L
+
+            let singleMapDesiredParityPlotCount = distanceCounts |> countMatches
+            let singleMapOppositeParityPlotCount = distanceCounts |> countNonMatches
+
+            singleMapDesiredParityPlotCount * numEvenDistanceMaps + singleMapOppositeParityPlotCount * numOddDistanceMaps
+
+        /// Count of plots reachable at the target distance within maps that are due North, South, East or West of the
+        /// centre map on one of the two furthest such maps.
+        let calculateBoundaryInlineMapsMatchingPlotsCount targetSteps map distanceCounts =
+
+            let countMatches, _ = generateCountFunctions targetSteps
+
+            let {
+                    SideLength = sideLength
+                    DistanceToAnotherMap = distanceToAnotherMap
+                    FurthestInlineMapDistance = furthestDistance
+                }
+                =
+                calculateMapProperties targetSteps map
+
+            distanceCounts
+            |> Array.collect (fun (distance, count) ->
+                let distanceInFirstMap = distance + distanceToAnotherMap
+                let inSecondFurthestMap = distanceInFirstMap + (furthestDistance - 2<M>) * sideLength * 1<1/M>, count
+                let inFurthestMap = distanceInFirstMap + (furthestDistance - 1<M>) * sideLength * 1<1/M>, count
+                [| inSecondFurthestMap; inFurthestMap |])
+            |> countMatches
+
+        /// Count of plots reachable at the target distance within maps that are not inline with the centre map and are
+        /// not within two maps from unreachable maps.
+        let calculateInteriorOffsetMapsMatchingPlotsCount targetSteps map distanceCounts =
+
+            let countMatches, countNonMatches = generateCountFunctions targetSteps
+
+            let { FurthestOffsetMapDistance = furthestDistance } = calculateMapProperties targetSteps map
+
+            /// The number of offset maps in a single quadrant with reachable plots that are an even or odd distance,
+            /// respectively, from the central map, not including any within two maps from unreachable maps.
+            // TODO: ensure non-negative.
+            let numEvenDistanceMaps, numOddDistanceMaps =
+                let z = furthestDistance * 1<1/M> |> int64
+                // Because the side length is assumed to be odd, the maps alternate distance parity.
+                if z % 2L = 0L then
+                    ((z - 2L) / 2L) * ((z - 2L) / 2L), ((z - 4L) / 2L) * ((z - 2L) / 2L)
+                else
+                    ((z - 3L) / 2L) * ((z - 3L) / 2L), ((z - 3L) / 2L) * ((z - 1L) / 2L)
+
+            let singleMapDesiredParityPlotCount = distanceCounts |> countMatches
+            let singleMapOppositeParityPlotCount = distanceCounts |> countNonMatches
+
+            singleMapDesiredParityPlotCount * numEvenDistanceMaps + singleMapOppositeParityPlotCount * numOddDistanceMaps
+
+        /// Count of plots reachable at the target distance within maps that are not due North, South, East or West of
+        /// the centre map that is in one of the such maps that is as far away as possible from the centre map.
+        let calculateBoundaryOffsetMapsMatchingPlotsCount targetSteps map distanceCounts =
+
+            let countMatches, _ = generateCountFunctions targetSteps
+
+            let {
+                    SideLength = sideLength
+                    DistanceToAnotherMap = distanceToAnotherMap
+                    FurthestOffsetMapDistance = furthestDistance
+                }
+                =
+                calculateMapProperties targetSteps map
+
+            distanceCounts
+            |> Array.collect (fun (distance, count) ->
+
+                let distanceInFirstMap = distance + 2 * distanceToAnotherMap
+                let inSecondFurthestMaps = distanceInFirstMap + (furthestDistance - 3<M>) * sideLength * 1<1/M>, count
+                let inFurthestMaps = distanceInFirstMap + (furthestDistance - 2<M>) * sideLength * 1<1/M>, count
+
+                let furthestMapsPerQuadrant = (furthestDistance - 1<M>) * 1<1/M> |> int64
+                let secondFurthestMapsPerQuadrant = furthestMapsPerQuadrant - 1L
+
+                [|
+                    for _ in 1L .. secondFurthestMapsPerQuadrant do
+                        inSecondFurthestMaps
+                    for _ in 1L .. furthestMapsPerQuadrant do
+                        inFurthestMaps
+                |])
+            |> countMatches
+
+        let solve targetSteps lines =
+
+            let map = parse lines
+
+            let distanceCounts = map |> calculateDistanceCounts
+
+            let centreMapMatchingPlotsCount = calculateCentreMapMatchingPlotsCount targetSteps distanceCounts.FromCentre
+
+            let inlineMapsMatchingPlotsCount =
+                [|
+                    distanceCounts.FromEast
+                    distanceCounts.FromNorth
+                    distanceCounts.FromWest
+                    distanceCounts.FromSouth
+                |]
+                |> Array.sumBy (fun dc ->
+                    calculateInteriorInlineMapsMatchingPlotsCount targetSteps map dc
+                    + calculateBoundaryInlineMapsMatchingPlotsCount targetSteps map dc)
+
+            let offsetMapsMatchingPlotsCount =
+                [|
+                    distanceCounts.FromNorthEast
+                    distanceCounts.FromNorthWest
+                    distanceCounts.FromSouthEast
+                    distanceCounts.FromSouthWest
+                |]
+                |> Array.sumBy (fun dc ->
+                    calculateInteriorOffsetMapsMatchingPlotsCount targetSteps map dc
+                    + calculateBoundaryOffsetMapsMatchingPlotsCount targetSteps map dc)
+
+            centreMapMatchingPlotsCount
+            + inlineMapsMatchingPlotsCount
+            + offsetMapsMatchingPlotsCount
+
+    module Test =
+
+        let test gridSize target (lines: string array) =
+
+            let sideLength = lines.Length
+            let midpoint = gridSize * sideLength / 2
+
+            let print x = printfn $"%A{x}"; x
+
+            let partOneAnswer =
+                let repeated (str: string) = String.Join("", Array.replicate gridSize str)
+                [| for _ in 1 .. gridSize do yield! lines |> Array.map repeated |]
+                |> Array.map (String.map (fun c -> if c = 'S' then '.' else c))
+                |> Array.mapi (fun i s ->
+                    if i = midpoint then
+                        s |> String.mapi (fun j c -> if j = midpoint then 'S' else c)
+                    else
+                        s)
+                |> PartOne.solve target
+                |> int64
+                |> print
+
+            let partTwoAnswer =
+                lines
+                |> PartTwo.solve target
+                |> print
+
+            partOneAnswer = partTwoAnswer
+
+        let printParts targetDistance lines=
+            let map = PartTwo.parse lines
+
+            let distanceCounts = PartTwo.calculateDistanceCounts map
+
+            let print x = printfn $"%A{x}"
+            PartTwo.calculateCentreMapMatchingPlotsCount targetDistance distanceCounts.FromCentre |> print
+            PartTwo.calculateInteriorInlineMapsMatchingPlotsCount targetDistance map distanceCounts.FromSouth |> print
+            PartTwo.calculateBoundaryInlineMapsMatchingPlotsCount targetDistance map distanceCounts.FromSouth |> print
+            PartTwo.calculateInteriorOffsetMapsMatchingPlotsCount targetDistance map distanceCounts.FromSouthWest |> print
+            PartTwo.calculateBoundaryOffsetMapsMatchingPlotsCount targetDistance map distanceCounts.FromSouthWest |> print
+
+        // Need to go at least 4 maps away to ensure that both same parity and opposite parity interior maps are
+        // encountered.
+        let test1 () =
+            [|
+                "..."
+                ".S."
+                "..."
+            |]
+            // |> fun lines -> printParts 12 lines; lines
+            |> test 9 12
+
+        // Check odd number of maps away.
+        let test2 () =
+            [|
+                "..."
+                ".S."
+                "..."
+            |]
+            |> test 11 15
+
+        // Test with some rocks.
+        let test3 () =
+            [|
+                "......."
+                ".....#."
+                "..#.#.."
+                "...S..."
+                "..#..#."
+                "..#.##."
+                "......."
+            |]
+            |> test 9 28
+
+        // Test odd distance to next map.
+        let test4 () =
+            [|
+                "....."
+                "....."
+                "..S.."
+                "....."
+                "....."
+            |]
+            |> test 5 8
+
+        // Test where some inline non-boundary maps are not covered.
+        let test5 () =
+            [|
+                "......."
+                "......."
+                "......."
+                "...S..."
+                "......."
+                "......."
+                "......."
+            |]
+            |> test 5 11
+
+        // Test where some offset non-boundary maps are not covered.
+        let test6 () =
+            [|
+                "....."
+                "....."
+                "..S.."
+                "....."
+                "....."
+            |]
+            // |> fun lines -> printParts 16 lines; lines
+            |> test 9 16
+
+        // Even distance to another map, even furthest map distance.
+        let test7 () =
+            let map =
+                [|
+                    "..."
+                    ".S."
+                    "..."
+                |]
+                |> PartTwo.parse
+            let dcs = PartTwo.calculateDistanceCounts map
+            PartTwo.calculateInteriorInlineMapsMatchingPlotsCount 17 map dcs.FromSouth
+            |> (=) 18
+
+        // Even distance to another map, odd furthest map distance.
+        let test8 () =
+            let map =
+                [|
+                    "..."
+                    ".S."
+                    "..."
+                |]
+                |> PartTwo.parse
+            let dcs = PartTwo.calculateDistanceCounts map
+            PartTwo.calculateInteriorInlineMapsMatchingPlotsCount 14 map dcs.FromSouth
+            |> (=) 13
+
+        // Odd distance to another map, even furthest map distance.
+        let test9 () =
+            let map =
+                [|
+                    "....."
+                    "....."
+                    "..S.."
+                    "....."
+                    "....."
+                |]
+                |> PartTwo.parse
+            let dcs = PartTwo.calculateDistanceCounts map
+            PartTwo.calculateInteriorInlineMapsMatchingPlotsCount 28 map dcs.FromSouth
+            |> (=) 50
+
+        // Odd distance to another map, odd furthest map distance.
+        let test10 () =
+            let map =
+                [|
+                    "....."
+                    "....."
+                    "..S.."
+                    "....."
+                    "....."
+                |]
+                |> PartTwo.parse
+            let dcs = PartTwo.calculateDistanceCounts map
+            PartTwo.calculateInteriorInlineMapsMatchingPlotsCount 23 map dcs.FromSouth
+            |> (=) 38
+
+        // Even further map distance.
+        let test11 () =
+            let map =
+                [|
+                    "..."
+                    ".S."
+                    "..."
+                |]
+                |> PartTwo.parse
+            let dcs = PartTwo.calculateDistanceCounts map
+            PartTwo.calculateInteriorOffsetMapsMatchingPlotsCount 16 map dcs.FromSouthWest
+            |> (=) 28
+
+        // Odd further map distance.
+        let test12 () =
+            let map =
+                [|
+                    "..."
+                    ".S."
+                    "..."
+                |]
+                |> PartTwo.parse
+            let dcs = PartTwo.calculateDistanceCounts map
+            PartTwo.calculateInteriorOffsetMapsMatchingPlotsCount 19 map dcs.FromSouthWest
+            |> (=) 46
+
+        // A few levels of interior offset maps.
+        let test13 () =
+            [|
+                "..."
+                ".S."
+                "..."
+            |]
+            |> test 11 16
+
+        // A few levels of interior offset maps.
+        let test14 () =
+            [|
+                "..."
+                ".S."
+                "..."
+            |]
+            |> test 13 19
+
+        let runTests () =
+            true
+            && test1 ()
+            && test2 ()
+            && test3 ()
+            && test4 ()
+            && test5 ()
+            && test6 ()
+            && test7 ()
+            && test8 ()
+            && test9 ()
+            && test10 ()
+            && test11 ()
+            && test12 ()
+            && test13 ()
+            && test14 ()
+
+Day21.Test.test14 ()
+Day21.Test.runTests ()
+
 "./input/2023/day21"
 |> System.IO.File.ReadAllLines
-|> Day21.PartOne.solve
+|> Day21.PartTwo.solve 26501365
