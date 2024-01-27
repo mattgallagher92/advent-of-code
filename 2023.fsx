@@ -2816,6 +2816,95 @@ module Day21 =
             + (n - 1L) * oddSideMapsCount
             + n * evenSideMapCount
 
-"./input/2023/day21"
+module Day22 =
+
+    module PartOne =
+
+        type Brick = {
+            Start: int * int * int
+            End: int * int * int
+        }
+
+        module Brick =
+
+            let lowestZ { Start = _, _, zs; End = _, _, ze } = Math.Min(zs, ze)
+
+            let highestZ { Start = _, _, zs; End = _, _, ze } = Math.Max(zs, ze)
+
+            let crossSection { Start = xs, ys, _; End = xe, ye, _ } = [|
+                for x in xs .. xe do
+                    for y in ys .. ye do
+                        x, y
+            |]
+
+            let crossSectionsOverlap b1 =
+                let cs1 = b1 |> crossSection |> set
+                fun b2 -> b2 |> crossSection |> Array.exists (fun (x, y) -> Set.contains (x, y) cs1)
+
+        module SettledBricks =
+
+            let supportedBricks settledBricks brick =
+
+                let highestZ = Brick.highestZ brick
+                let overlapsCrossSection = Brick.crossSectionsOverlap brick
+
+                settledBricks |> Array.filter (fun b -> Brick.lowestZ b = highestZ + 1 && b |> overlapsCrossSection)
+
+            let supportingBricks settledBricks brick =
+
+                let lowestZ = Brick.lowestZ brick
+                let overlapsCrossSection = Brick.crossSectionsOverlap brick
+
+                settledBricks |> Array.filter (fun b -> Brick.highestZ b = lowestZ - 1 && b |> overlapsCrossSection)
+
+            let filterToRemovable settledBricks =
+                settledBricks
+                |> Array.filter (fun brick ->
+                    let allSupportedBricksHaveOtherSupports =
+                        brick
+                        |> supportedBricks settledBricks
+                        |> Array.forall (supportingBricks settledBricks >> Array.length >> (<>) 1)
+
+                    allSupportedBricksHaveOtherSupports)
+
+        let parse =
+            Array.map (fun (line: string) ->
+                let parts = line.Split('~')
+                let x0, y0, z0 =
+                    let tokens = parts.[0].Split(',')
+                    int tokens.[0], int tokens.[1], int tokens.[2]
+                let x1, y1, z1 =
+                    let tokens = parts.[1].Split(',')
+                    int tokens.[0], int tokens.[1], int tokens.[2]
+                { Start = x0, y0, z0; End = x1, y1, z1 })
+
+        let settle =
+            Array.sortBy Brick.lowestZ
+            >> Array.fold
+                (fun state ({ Start = xs, ys, zs; End = xe, ye, ze } as brick) ->
+                    let overlapsCrossSection = Brick.crossSectionsOverlap brick
+                    let newZ =
+                        state
+                        |> List.tryFind overlapsCrossSection
+                        |> Option.map Brick.highestZ
+                        |> Option.defaultValue 0
+                        |> (+) 1
+                    if zs < ze then
+                        { Start = xs, ys, newZ; End = xe, ye, newZ + ze - zs } :: state
+                    else
+                        { Start = xs, ys, newZ + zs - ze; End = xe, ye, newZ } :: state)
+                []
+
+        let solve lines =
+            lines
+            |> parse
+            |> settle
+            |> List.toArray
+            |> SettledBricks.filterToRemovable
+            |> Array.length
+
+"./input/2023/day22"
 |> System.IO.File.ReadAllLines
-|> Day21.PartTwo.solve 26501365
+|> Day22.PartOne.solve
+// 510 is too high.
+// 559 is too high.
