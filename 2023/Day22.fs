@@ -65,6 +65,22 @@ module SettledBricks =
 
             allSupportedBricksHaveOtherSupports)
 
+    let bricksThatWouldFallWhenDisintegrating settledBricks brick =
+
+
+        let wouldFall = HashSet<Brick>([| brick |])
+
+        for b in settledBricks do
+            if
+                b |> Brick.lowestZ |> (<>) 1
+                && b |> supportingBricks settledBricks |> Array.forall wouldFall.Contains
+            then
+                wouldFall.Add b |> ignore
+
+        wouldFall.Remove brick |> ignore
+
+        wouldFall |> Seq.toArray |> Array.sortBy Brick.lowestZ
+
 let parse =
     Array.map (fun (line: string) ->
         let parts = line.Split('~')
@@ -107,6 +123,25 @@ module PartOne =
         |> settle
         |> SettledBricks.filterToRemovable
         |> Array.length
+
+module PartTwo =
+
+    let solve lines =
+
+        let settledBricks =
+            lines
+            |> parse
+            |> settle
+            |> Array.sortBy Brick.lowestZ
+
+        (0, settledBricks)
+        ||> Array.fold (fun state brick ->
+            let wouldFall =
+                brick
+                |> SettledBricks.bricksThatWouldFallWhenDisintegrating settledBricks
+                |> Array.length
+            wouldFall + state)
+
 
 module Test =
 
@@ -365,6 +400,5 @@ module Test =
     let all = testList "Day22" [
         Brick.tests
         SettledBricks.tests
-        // TODO: reinstate.
         settleTests
     ]
