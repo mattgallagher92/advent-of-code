@@ -65,21 +65,44 @@ module SettledBricks =
 
             allSupportedBricksHaveOtherSupports)
 
-    let bricksThatWouldFallWhenDisintegrating settledBricks brick =
+    let bricksThatWouldFallWhenDisintegrating settledBricks =
 
+        let groupedSettledBricks =
+            settledBricks
+            |> Array.groupBy Brick.lowestZ
+            |> Array.sortBy fst
 
-        let wouldFall = HashSet<Brick>([| brick |])
+        fun brick ->
 
-        for b in settledBricks do
-            if
-                b |> Brick.lowestZ |> (<>) 1
-                && b |> supportingBricks settledBricks |> Array.forall wouldFall.Contains
-            then
-                wouldFall.Add b |> ignore
+            let wouldFall = HashSet<Brick>([| brick |])
 
-        wouldFall.Remove brick |> ignore
+            let z' = Brick.lowestZ brick
+            let mutable highestRemovedCube = Brick.highestZ brick
 
-        wouldFall |> Seq.toArray |> Array.sortBy Brick.lowestZ
+            groupedSettledBricks
+            |> Seq.skipWhile (fun (z, _) -> z <= z')
+            |> Seq.map (fun (z, bricksAtZ) ->
+
+                let wouldFallAtZ =
+                    // Why does this not work with <= hRC + 1?!
+                    if z <= highestRemovedCube + 3 then
+                        bricksAtZ
+                        |> Array.filter (supportingBricks settledBricks >> Array.forall wouldFall.Contains)
+                    else
+                        [||]
+
+                wouldFallAtZ |> Array.iter (wouldFall.Add >> ignore)
+
+                if wouldFallAtZ |> (not << Array.isEmpty) then
+                    highestRemovedCube <- wouldFallAtZ |> Array.map Brick.highestZ |> Array.max
+
+                z, wouldFallAtZ)
+            |> Seq.toArray
+            |> ignore
+
+            wouldFall.Remove brick |> ignore
+
+            wouldFall |> Seq.toArray |> Array.sortBy Brick.lowestZ
 
 let parse =
     Array.map (fun (line: string) ->
@@ -134,14 +157,12 @@ module PartTwo =
             |> settle
             |> Array.sortBy Brick.lowestZ
 
+        let bricksThatWouldFall = SettledBricks.bricksThatWouldFallWhenDisintegrating settledBricks
+
         (0, settledBricks)
         ||> Array.fold (fun state brick ->
-            let wouldFall =
-                brick
-                |> SettledBricks.bricksThatWouldFallWhenDisintegrating settledBricks
-                |> Array.length
+            let wouldFall = brick |> bricksThatWouldFall |> Array.length
             wouldFall + state)
-
 
 module Test =
 
