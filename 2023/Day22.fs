@@ -85,7 +85,7 @@ module SettledBricks =
 
                 let wouldFallAtZ =
                     // Why does this not work with <= hRC + 1?!
-                    if z <= highestRemovedCube + 3 then
+                    if z <= highestRemovedCube + 1 then
                         bricksAtZ
                         |> Array.filter (supportingBricks settledBricks >> Array.forall wouldFall.Contains)
                     else
@@ -168,6 +168,81 @@ module Test =
 
     open Expecto
     open FsCheck
+
+    type BrickGen() =
+
+        static member private GenBrick =
+            fun size -> gen {
+                let genX = Gen.choose(0, size)
+                let genY = Gen.choose(0, size)
+                let genZ = Gen.choose(1, if size > 0 then size else 1)
+
+                let! xs = genX
+                let! ys = genY
+                let! zs = genZ
+
+                let! xe, ye, ze = gen {
+
+                    match! Gen.choose(1, 3) with
+                    | 1 ->
+                        let! xe = genX
+                        return xe, ys, zs
+                    | 2 ->
+                        let! ye = genY
+                        return xs, ye, zs
+                    | 3 ->
+                        let! ze = genZ
+                        return xs, ys, ze
+                    | i ->
+                        return failwith $"Bug: %i{i} is not between 1 and 3."
+
+                }
+
+                return { Start = xs, ys, zs; End = xe, ye, ze }
+            }
+            |> Gen.sized
+
+        static member private GenBricks = gen {
+            let! bricks = Gen.nonEmptyListOf BrickGen.GenBrick
+
+            let filledCubes = HashSet<int * int * int>()
+
+            return
+                ([], bricks)
+                ||> List.fold (fun state brick ->
+                    let cubes = brick |> Brick.cubes
+
+                    if filledCubes.Overlaps(cubes) then
+                        state
+                    else
+                        cubes |> Array.iter (filledCubes.Add >> ignore)
+                        brick :: state)
+                |> List.toArray
+        }
+
+        static member private ShrinkBricks (bricks: Brick array) = seq {
+            let l = bricks.Length
+            for i in 0 .. l - 1 do
+                    bricks |> Array.removeAt i
+        }
+
+        static member Brick () : Arbitrary<Brick> = Arb.fromGen BrickGen.GenBrick
+
+        static member Bricks () : Arbitrary<Brick array> =
+            Arb.fromGenShrink(BrickGen.GenBricks, BrickGen.ShrinkBricks)
+
+    let fsCheckConfig = { FsCheckConfig.defaultConfig with arbitrary = [typeof<BrickGen>] }
+
+    let overlappingBricks bricks =
+        (bricks, bricks)
+        ||> Array.allPairs
+        |> Array.filter (fun (b1, b2) -> b1 <> b2 && b1 |> Brick.intersects b2)
+
+    let containsOverlappingBricks bricks =
+        bricks
+        |> overlappingBricks
+        |> Array.isEmpty
+        |> not
 
     module Brick =
 
@@ -329,84 +404,46 @@ module Test =
                 Expect.equal removable [| b; c; d; e; g |] "b, c, d, e and g can be disintegrated"
             }
 
+            testList "bricksThatWouldFallWhenDisintegrating" [
+
+                // Correct but slow implementation.
+                let testOracle settledBricks brick =
+
+                    let wouldFall = HashSet<Brick>([| brick |])
+
+                    for b in settledBricks |> Seq.sortBy Brick.lowestZ do
+                        if
+                            b |> Brick.lowestZ |> (<>) 1
+                            &&
+                                b |> SettledBricks.supportingBricks settledBricks |> Array.forall wouldFall.Contains
+                        then
+                            wouldFall.Add b |> ignore
+
+                    wouldFall.Remove brick |> ignore
+
+                    wouldFall |> Seq.toArray |> Array.sortBy Brick.lowestZ
+
+                testPropertyWithConfig { fsCheckConfig with maxTest = 30000 } "Answer is same as test oracle" (fun (NonNegativeInt i) bricks ->
+                    Expect.isFalse (bricks |> containsOverlappingBricks) "Input should not have overlapping bricks"
+
+                    let settled = settle bricks
+                    let brick = settled.[ i % settled.Length ]
+
+                    SettledBricks.bricksThatWouldFallWhenDisintegrating settled brick = testOracle settled brick)
+
+                test "real data" {
+
+                    let lines = "./input/day22" |> System.IO.File.ReadAllLines
+                    let settledBricks = lines |> parse |> settle
+
+                    let slow i = testOracle settledBricks i
+                    let fast i = TODO
+                }
+            ]
+
         ]
 
-    type BrickGen() =
-
-        static member private GenBrick =
-            fun size -> gen {
-                let genX = Gen.choose(0, size)
-                let genY = Gen.choose(0, size)
-                let genZ = Gen.choose(1, if size > 0 then size else 1)
-
-                let! xs = genX
-                let! ys = genY
-                let! zs = genZ
-
-                let! xe, ye, ze = gen {
-
-                    match! Gen.choose(1, 3) with
-                    | 1 ->
-                        let! xe = genX
-                        return xe, ys, zs
-                    | 2 ->
-                        let! ye = genY
-                        return xs, ye, zs
-                    | 3 ->
-                        let! ze = genZ
-                        return xs, ys, ze
-                    | i ->
-                        return failwith $"Bug: %i{i} is not between 1 and 3."
-
-                }
-
-                return { Start = xs, ys, zs; End = xe, ye, ze }
-            }
-            |> Gen.sized
-
-        static member private GenBricks = gen {
-            let! bricks = Gen.listOf BrickGen.GenBrick
-
-            let filledCubes = HashSet<int * int * int>()
-
-            return
-                ([], bricks)
-                ||> List.fold (fun state brick ->
-                    let cubes = brick |> Brick.cubes
-
-                    if filledCubes.Overlaps(cubes) then
-                        state
-                    else
-                        cubes |> Array.iter (filledCubes.Add >> ignore)
-                        brick :: state)
-                |> List.toArray
-        }
-
-        static member private ShrinkBricks (bricks: Brick array) = seq {
-            let l = bricks.Length
-            for i in 0 .. l - 1 do
-                    bricks |> Array.removeAt i
-        }
-
-        static member Brick () : Arbitrary<Brick> = Arb.fromGen BrickGen.GenBrick
-
-        static member Bricks () : Arbitrary<Brick array> =
-            Arb.fromGenShrink(BrickGen.GenBricks, BrickGen.ShrinkBricks)
-
-    let fsCheckConfig = { FsCheckConfig.defaultConfig with arbitrary = [typeof<BrickGen>] }
-
     let settleTests = testList "settle" [
-
-        let overlappingBricks bricks =
-            (bricks, bricks)
-            ||> Array.allPairs
-            |> Array.filter (fun (b1, b2) -> b1 <> b2 && b1 |> Brick.intersects b2)
-
-        let containsOverlappingBricks bricks =
-            bricks
-            |> overlappingBricks
-            |> Array.isEmpty
-            |> not
 
         testPropertyWithConfig fsCheckConfig "no overlapping bricks" (fun bricks ->
             Expect.isFalse (bricks |> containsOverlappingBricks) "Input should not have overlapping bricks"
