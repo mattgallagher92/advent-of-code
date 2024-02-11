@@ -2,11 +2,11 @@
 
 [<EntryPoint>]
 let main args =
-    Day22.Test.all |> runTestsWithCLIArgs [] args |> ignore
+    Day23.Test.all |> runTestsWithCLIArgs [] args |> ignore
 
-    let input = "./input/day22" |> System.IO.File.ReadAllLines
+    let input = "./input/day23" |> System.IO.File.ReadAllLines
 
-    input |> Day22.PartOne.solve |> printfn "Day 22 part one: %i"
-    input |> Day22.PartTwo.solve |> printfn "Day 23 part two: %A"
+    input |> Day23.PartOne.solve |> printfn "Day 23 part one: %i"
+    // input |> Day23.PartTwo.solve |> printfn "Day 23 part two: %A"
 
     0
