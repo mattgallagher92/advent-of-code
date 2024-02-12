@@ -9,11 +9,13 @@
   <ItemGroup>
     <Compile Include="Day22.fs" />
     <Compile Include="Day23.fs" />
+    <Compile Include="Day24.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Expecto.FsCheck" Version="10.1.0" />
+    <PackageReference Include="Unquote" Version="7.0.0" />
   </ItemGroup>
 
 </Project>
