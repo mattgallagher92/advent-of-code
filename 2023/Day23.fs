@@ -13,34 +13,6 @@ let isBelow (r1, c1) (r2, c2) = r2 = r1 + 1 && c2 = c1
 let isToLeftOf (r1, c1) (r2, c2) = r2 = r1 && c2 = c1 - 1
 let isToRightOf (r1, c1) (r2, c2) = r2 = r1 && c2 = c1 + 1
 
-let nextPositions map previous (row, col) = [|
-
-    if previous |> Option.map (not << isAbove (row, col)) |> Option.defaultValue true then
-        match above map (row, col) with
-        | Some '.' | Some '^' | Some '<' | Some '>' -> row - 1, col
-        | Some 'v' | Some '#' | None -> ()
-        | Some _ -> failwith "Invalid char"
-
-    if previous |> Option.map (not << isToLeftOf (row, col)) |> Option.defaultValue true then
-        match toLeftOf map (row, col) with
-        | Some '.' | Some '^' | Some 'v' | Some '<' -> row, col - 1
-        | Some '>' | Some '#' | None -> ()
-        | Some _ -> failwith "Invalid char"
-
-    if previous |> Option.map (not << isToRightOf (row, col)) |> Option.defaultValue true then
-        match toRightOf map (row, col) with
-        | Some '.' | Some '^' | Some 'v' | Some '>' -> row, col + 1
-        | Some '<' | Some '#' | None -> ()
-        | Some _ -> failwith "Invalid char"
-
-    if previous |> Option.map (not << isBelow (row, col)) |> Option.defaultValue true then
-        match below map (row, col) with
-        | Some '.' | Some 'v' | Some '<' | Some '>' -> row + 1, col
-        | Some '^' | Some '#' | None -> ()
-        | Some _ -> failwith "Invalid char"
-
-|]
-
 module PartOne =
 
     type InProgressState = {
@@ -52,6 +24,34 @@ module PartOne =
     type Hike =
         | InProgress of InProgressState
         | Finished of steps:int
+
+    let nextPositions map previous (row, col) = [|
+
+        if previous |> Option.map (not << isAbove (row, col)) |> Option.defaultValue true then
+            match above map (row, col) with
+            | Some '.' | Some '^' | Some '<' | Some '>' -> row - 1, col
+            | Some 'v' | Some '#' | None -> ()
+            | Some _ -> failwith "Invalid char"
+
+        if previous |> Option.map (not << isToLeftOf (row, col)) |> Option.defaultValue true then
+            match toLeftOf map (row, col) with
+            | Some '.' | Some '^' | Some 'v' | Some '<' -> row, col - 1
+            | Some '>' | Some '#' | None -> ()
+            | Some _ -> failwith "Invalid char"
+
+        if previous |> Option.map (not << isToRightOf (row, col)) |> Option.defaultValue true then
+            match toRightOf map (row, col) with
+            | Some '.' | Some '^' | Some 'v' | Some '>' -> row, col + 1
+            | Some '<' | Some '#' | None -> ()
+            | Some _ -> failwith "Invalid char"
+
+        if previous |> Option.map (not << isBelow (row, col)) |> Option.defaultValue true then
+            match below map (row, col) with
+            | Some '.' | Some 'v' | Some '<' | Some '>' -> row + 1, col
+            | Some '^' | Some '#' | None -> ()
+            | Some _ -> failwith "Invalid char"
+
+    |]
 
     /// Assumes no loops.
     let hikeLengths lines =
@@ -81,8 +81,81 @@ module PartOne =
             else
                 nextHikes |> Array.map (function InProgress _ -> failwith "bug" | Finished steps -> steps)
 
-
         inner [| InProgress { StepsSoFar = 0; Previous = None; Current = startPos } |]
+
+    let solve lines = lines |> hikeLengths |> Array.max
+
+module PartTwo =
+    open System.Collections.Generic
+
+    type InProgressState = {
+        StepsSoFar: int
+        // Use HashSet because Set is too slow.
+        Visited: (int * int) HashSet
+        Current: int * int
+    }
+
+    type Hike =
+        | InProgress of InProgressState
+        | Finished of steps:int
+
+    let adjacentPositions map (row, col) = [|
+
+        match above map (row, col) with
+        | Some '.' | Some 'v' | Some '^' | Some '<' | Some '>' -> row - 1, col
+        | Some '#' | None -> ()
+        | Some _ -> failwith "Invalid char"
+
+        match toLeftOf map (row, col) with
+        | Some '.' | Some '^' | Some 'v' | Some '<' | Some '>' -> row, col - 1
+        | Some '#' | None -> ()
+        | Some _ -> failwith "Invalid char"
+
+        match toRightOf map (row, col) with
+        | Some '.' | Some '^' | Some 'v' | Some '<' | Some '>' -> row, col + 1
+        | Some '#' | None -> ()
+        | Some _ -> failwith "Invalid char"
+
+        match below map (row, col) with
+        | Some '.' | Some '^' | Some 'v' | Some '<' | Some '>' -> row + 1, col
+        | Some '#' | None -> ()
+        | Some _ -> failwith "Invalid char"
+
+    |]
+
+    let hikeLengths lines =
+
+        let startPos = startPosition lines
+        let endPos = endPosition lines
+        let map = lines |> array2D
+
+        let rec inner hikes =
+
+            let nextHikes =
+                hikes
+                |> Array.collect
+                    (function
+                    | Finished steps ->
+                        [| Finished steps |]
+                    | InProgress { StepsSoFar = steps; Visited = visited; Current = curr } ->
+                        adjacentPositions map curr
+                        |> Array.filter (not << visited.Contains)
+                        |> Array.map (fun next ->
+                            if next = endPos then
+                                Finished (steps + 1)
+                            else
+                                InProgress {
+                                    StepsSoFar = steps + 1
+                                    Visited = let s = HashSet(visited) in s.Add next |> ignore; s
+                                    Current = next
+                                }))
+
+            if nextHikes |> Array.exists (function InProgress _ -> true | Finished _ -> false) then
+                inner nextHikes
+            else
+                nextHikes |> Array.map (function InProgress _ -> failwith "bug" | Finished steps -> steps)
+
+        inner [| InProgress { StepsSoFar = 0; Visited = HashSet [| startPos |]; Current = startPos } |]
 
     let solve lines = lines |> hikeLengths |> Array.max
 
@@ -153,28 +226,33 @@ module Test =
             }
         ]
 
-        testList "nextPositions" [
+        testList "PartOne.nextPositions" [
 
             test "correct when no previous" {
-                let next = (None, (0, 1)) ||> nextPositions sampleMap
+                let next = (None, (0, 1)) ||> PartOne.nextPositions sampleMap
                 Expect.equal next [| (1, 1) |] ""
             }
 
             test "correct when on a straight" {
-                let next = (Some (0, 1), (1, 1)) ||> nextPositions sampleMap
+                let next = (Some (0, 1), (1, 1)) ||> PartOne.nextPositions sampleMap
                 Expect.equal next [| (1, 2) |] ""
             }
 
             test "correct when at a branch point" {
-                let next = (Some (4, 3), (5, 3)) ||> nextPositions sampleMap
+                let next = (Some (4, 3), (5, 3)) ||> PartOne.nextPositions sampleMap
                 Expect.equal next [| (5, 4); (6, 3) |] ""
             }
 
         ]
 
-        test "hikeLengths gives correct values" {
+        test "PartOne.hikeLengths gives correct values" {
             let lengths = PartOne.hikeLengths sampleLines |> Array.sort
             Expect.equal lengths [| 74; 82; 82; 86; 90; 94 |] ""
+        }
+
+        test "PartTwo.hikeLengths has correct maximum" {
+            let lengths = PartTwo.hikeLengths sampleLines |> Array.max
+            Expect.equal lengths 154 ""
         }
 
     ]
