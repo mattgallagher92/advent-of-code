@@ -86,12 +86,10 @@ module PartOne =
     let solve lines = lines |> hikeLengths |> Array.max
 
 module PartTwo =
-    open System.Collections.Generic
 
     type InProgressState = {
         StepsSoFar: int
-        // Use HashSet because Set is too slow.
-        Visited: (int * int) HashSet
+        Visited: (int * int) Set
         Current: int * int
     }
 
@@ -123,11 +121,48 @@ module PartTwo =
 
     |]
 
-    let hikeLengths lines =
+    /// Finds the positions corresponding to places where a decision about which direction to follow has to be made.
+    let findBranchPoints map = [|
+        for row in 0 .. Array2D.length1 map - 1 do
+            for col in 0 .. Array2D.length2 map - 1 do
+                if Array2D.get map row col <> '#' && Array.length (adjacentPositions map (row, col)) > 2 then
+                     row, col
+    |]
 
-        let startPos = startPosition lines
-        let endPos = endPosition lines
-        let map = lines |> array2D
+    /// A node is either the start position, end position or a branch point.
+    let calculateDistancesBetweenNodes startPosition endPosition map =
+
+        let nodes = [| yield startPosition; yield! findBranchPoints map; yield endPosition |]
+        let nodeSet = Set nodes
+
+        nodes
+        |> Array.collect (fun node ->
+            adjacentPositions map node
+            |> Array.map (fun adjacent ->
+
+                let pathFromAdjacentToNextNode =
+                    (node, adjacent)
+                    |> Array.unfold (fun (prev, current) ->
+                        if nodeSet.Contains current then
+                            None
+                        else
+                            let next =
+                                match adjacentPositions map current |> Array.except [| prev |] with
+                                | [| n |] -> n
+                                | a -> failwith $"Should have one next pos for %A{prev}->%A{current}, but have %A{a}."
+                            Some (next, (current, next)))
+
+                let nextNode = pathFromAdjacentToNextNode |> Array.last
+                (node, nextNode), pathFromAdjacentToNextNode.Length + 1))
+
+    let hikeLengths startPos endPos distancesBetweenNodes =
+
+        // Given a node, returns the adjacent nodes with the distance to those nodes.
+        let adjacentNodeLookup =
+            distancesBetweenNodes
+            |> Array.groupBy (fst >> fst)
+            |> Array.map (fun (n, group) -> n, group |> Array.map (fun ((_, n'), d) -> n', d))
+            |> dict
 
         let rec inner hikes =
 
@@ -135,18 +170,20 @@ module PartTwo =
                 hikes
                 |> Array.collect
                     (function
+
                     | Finished steps ->
                         [| Finished steps |]
+
                     | InProgress { StepsSoFar = steps; Visited = visited; Current = curr } ->
-                        adjacentPositions map curr
-                        |> Array.filter (not << visited.Contains)
-                        |> Array.map (fun next ->
+                        adjacentNodeLookup[curr]
+                        |> Array.filter (fun (n, _) -> not (visited.Contains n))
+                        |> Array.map (fun (next, distance) ->
                             if next = endPos then
-                                Finished (steps + 1)
+                                Finished (steps + distance)
                             else
                                 InProgress {
-                                    StepsSoFar = steps + 1
-                                    Visited = let s = HashSet(visited) in s.Add next |> ignore; s
+                                    StepsSoFar = steps + distance
+                                    Visited = visited |> Set.add next
                                     Current = next
                                 }))
 
@@ -155,9 +192,18 @@ module PartTwo =
             else
                 nextHikes |> Array.map (function InProgress _ -> failwith "bug" | Finished steps -> steps)
 
-        inner [| InProgress { StepsSoFar = 0; Visited = HashSet [| startPos |]; Current = startPos } |]
+        inner [| InProgress { StepsSoFar = 0; Visited = Set [| startPos |]; Current = startPos } |]
 
-    let solve lines = lines |> hikeLengths |> Array.max
+    let solve lines =
+
+        let startPos = startPosition lines
+        let endPos = endPosition lines
+
+        lines
+        |> array2D
+        |> calculateDistancesBetweenNodes startPos endPos
+        |> hikeLengths startPos endPos
+        |> Array.max
 
 module Test =
 
@@ -191,16 +237,18 @@ module Test =
 
     let sampleInput = testList "sample input" [
 
+        let startPos = (0, 1)
+        let endPos = (22, 21)
         let sampleMap = sampleLines |> array2D
 
         test "start position is (0, 1)" {
-            let startPos = startPosition sampleLines
-            Expect.equal startPos (0, 1) ""
+            let actual = startPosition sampleLines
+            Expect.equal actual startPos ""
         }
 
         test "end position is (22, 21)" {
-            let endPos = endPosition sampleLines
-            Expect.equal endPos (22, 21) ""
+            let actual = endPosition sampleLines
+            Expect.equal actual actual ""
         }
 
         testList "around (3, 11)" [
@@ -229,7 +277,7 @@ module Test =
         testList "PartOne.nextPositions" [
 
             test "correct when no previous" {
-                let next = (None, (0, 1)) ||> PartOne.nextPositions sampleMap
+                let next = (None, startPos) ||> PartOne.nextPositions sampleMap
                 Expect.equal next [| (1, 1) |] ""
             }
 
@@ -250,8 +298,28 @@ module Test =
             Expect.equal lengths [| 74; 82; 82; 86; 90; 94 |] ""
         }
 
+        test "PartTwo.findBranchPoints returns correct values" {
+            let branchPoints = sampleMap |> PartTwo.findBranchPoints
+            Expect.equal branchPoints [| (3, 11); (5, 3); (11, 21); (13, 5); (13, 13); (19, 13); (19, 19) |] ""
+        }
+
+        test "PartTwo.calculateDistancesBetweenNodes contains correct values" {
+            let distances = PartTwo.calculateDistancesBetweenNodes startPos endPos sampleMap
+            let expected = [|
+                ((0, 1), (5, 3)), 15
+                ((5, 3), (3, 11)), 22
+                ((13, 5), (13, 13)), 12
+                ((19, 19), (22, 21)), 5
+            |]
+            Expect.containsAll distances expected ""
+        }
+
+
         test "PartTwo.hikeLengths has correct maximum" {
-            let lengths = PartTwo.hikeLengths sampleLines |> Array.max
+            let lengths =
+                PartTwo.calculateDistancesBetweenNodes startPos endPos sampleMap
+                |> PartTwo.hikeLengths startPos endPos
+                |> Array.max
             Expect.equal lengths 154 ""
         }
 
