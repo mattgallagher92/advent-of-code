@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="Expecto.FsCheck" Version="10.1.0" />
+    <PackageReference Include="MathNet.Numerics.FSharp" Version="5.0.0" />
     <PackageReference Include="Unquote" Version="7.0.0" />
   </ItemGroup>
 
