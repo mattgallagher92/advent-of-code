@@ -3,6 +3,7 @@ open MathNet.Numerics
 
 [<EntryPoint>]
 let main args =
+
     Day24.Test.all |> runTestsWithCLIArgs [] args |> ignore
 
     let input = "./input/day24" |> System.IO.File.ReadAllLines

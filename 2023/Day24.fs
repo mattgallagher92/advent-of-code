@@ -185,38 +185,113 @@ module PartTwo =
             else
                 None)
 
-    // Establish a sequence of velocities of increasing speed; test each such relative velocity for common intersection
-    // point; once such a velocity is found, trajectory is one with that velocity, with initial position at that
-    // intersection point.
-    let firstTrajectoryWhereRelativeTrajectoriesAllIntersectOrigin trajectories : Trajectory =
-        Seq.initInfinite id
-        |> Seq.collect (fun speedComponentSum -> seq {
-            for vX in -speedComponentSum .. speedComponentSum do
-                let remainingSum = (speedComponentSum - abs vX)
-                for vY in -remainingSum .. remainingSum do
-                    let nonNegativeVz = abs (speedComponentSum - abs vX - abs vY)
-                    if nonNegativeVz > 0 then
-                        int64 vX, int64 vY, int64 nonNegativeVz
-                        int64 vX, int64 vY, int64 -nonNegativeVz
+    type InclusiveRange = {
+        Start: int64
+        End: int64
+    }
+
+    type VelocityRanges = {
+        X: InclusiveRange array
+        Y: InclusiveRange array
+        Z: InclusiveRange array
+    }
+
+    /// Ranges of velocity coordinates for which any velocity with a coordinate in one of the ranges is not a viable
+    /// candidate for the solution.
+    let impossibleVelocityRanges trajectories : VelocityRanges =
+
+        let impossibleRanges (positionProjection: Trajectory -> int64) (velocityProjection: Trajectory -> int64) =
+
+            (([||], []), (trajectories |> Array.sortByDescending velocityProjection))
+            ||> Array.fold (fun (maxima, impossibleRanges) tr ->
+
+                let v = velocityProjection tr
+                let p = positionProjection tr
+
+                // Velocity-position pairs for which pairs with equal or higher velocity have equal or lower position.
+                let newMaxima =
+                    if maxima |> Array.isEmpty then
+                        [| v, p |]
                     else
-                        int64 vX, int64 vY, int64 nonNegativeVz
-        })
+                        let u, highestP = maxima.[0]
+                        if p > highestP then
+                            // TODO: could avoid this check by better sorting of trajectories.
+                            if u = v then[| (v, p); yield! maxima.[ 1 .. ] |] else [| (v, p); yield! maxima |]
+                        else
+                            maxima
+
+                // If p1 < p2 and v1 <= v2 then any velocity v in the range v1 to v2 is impossible. This is because the
+                // trajectory starting at p1 with velocity v1 - v and the trajectory starting at p2 with velocity v2 - v
+                // don't intersect (because they don't move toward the other p).
+                // Consideration can be limited to the maxima because if a pair is not a maximum then there is a point
+                // with equal or higher velocity and higher position; the ranges given by non-maxima are therefore
+                // contained in those given by maxima.
+                let newImpossibleRanges =
+
+                    match maxima |> Array.tryFindBack (fun (_, q) -> q > p) with
+                    | Some (higherV, _) ->
+                        let intersectedRanges, others =
+                            impossibleRanges |> List.partition (fun { Start = s } -> s <= higherV)
+                        let newImpossibleRange =
+                            ({ Start = v; End = higherV }, intersectedRanges)
+                            ||> List.fold (fun { End = e1 } { End = e2 } -> { Start = v; End = max e1 e2 })
+                        newImpossibleRange :: others
+
+                    | None ->
+                        impossibleRanges
+
+                newMaxima, newImpossibleRanges)
+            |> snd
+            |> List.toArray
+
+        {
+            X = impossibleRanges _.InitialX _.VelocityX
+            Y = impossibleRanges _.InitialY _.VelocityY
+            Z = impossibleRanges _.InitialZ _.VelocityZ
+        }
+
+    let possibleVelocityComponents maxVelocityComponent trajectories =
+
+        let potentialComponentValues = set [| -maxVelocityComponent .. maxVelocityComponent |]
+
+        let impossibleRanges = impossibleVelocityRanges trajectories
+        let toImpossibleSet ranges =
+            (Set.empty, ranges)
+            ||> Array.fold (fun set r -> (set, seq { r.Start .. r.End }) ||> Seq.fold (fun s i -> s |> Set.add i))
+
+        Set.difference potentialComponentValues (toImpossibleSet impossibleRanges.X),
+        Set.difference potentialComponentValues (toImpossibleSet impossibleRanges.Y),
+        Set.difference potentialComponentValues (toImpossibleSet impossibleRanges.Z)
+
+    // Test each velocity for a common intersection point amongst the relative trajectories; once such a velocity is
+    // found, trajectory is one with that velocity, with initial position at that intersection point.
+    let firstTrajectoryWhereRelativeTrajectoriesAllIntersectOrigin maxVelocityComponent trajectories : Trajectory option =
+
+        let possibleVxs, possibleVys, possibleVzs = possibleVelocityComponents maxVelocityComponent trajectories
+        seq {
+            for vx in possibleVxs do
+                for vy in possibleVys do
+                    for vz in possibleVzs do
+                        vx, vy, vz
+        }
         |> Seq.choose (fun (vX, vY, vZ as v) ->
             trajectories
             |> Array.map (relativeToVelocity v)
             |> commonIntersectionPoint
             |> Option.map (fun (x, y, z) ->
                 {
-                    // TODO: verify that x, y, z are all integers.
-                    InitialX = BigRational.ToInt32 x; InitialY = BigRational.ToInt32 y; InitialZ = BigRational.ToInt32 z
+                    InitialX = if x.IsInteger then int64 x.Numerator else failwith $"x is not an integer %A{x}"
+                    InitialY = if y.IsInteger then int64 y.Numerator else failwith $"y is not an integer %A{y}"
+                    InitialZ = if z.IsInteger then int64 z.Numerator else failwith $"z is not an integer %A{z}"
                     VelocityX = vX; VelocityY = vY; VelocityZ = vZ
                 }))
-        |> Seq.head
+        |> Seq.tryHead
 
     let solve lines =
         lines
         |> parse
-        |> firstTrajectoryWhereRelativeTrajectoriesAllIntersectOrigin
+        |> firstTrajectoryWhereRelativeTrajectoriesAllIntersectOrigin 500
+        |> Option.map (fun tr -> tr.InitialX + tr.InitialY + tr.InitialZ)
 
 module Test =
     open Swensen.Unquote
@@ -339,12 +414,33 @@ module Test =
                     Assertions.test <@ actual = Some expectedIntersectionPoint @>
                 }
 
+                test "impossibleVelocityRanges returns expected data" {
+                    let actual = PartTwo.impossibleVelocityRanges sampleTrajectories
+
+                    let expected = {
+                        PartTwo.X = [| { Start = -2; End = 1 } |]
+                        PartTwo.Y = [| { Start = -5; End = -2 } |]
+                        PartTwo.Z = [| { Start = -3; End = -1 } |]
+                    }
+                    Assertions.test <@ actual = expected @>
+                }
+
+                test "" {
+                    let actual = PartTwo.possibleVelocityComponents 5 sampleTrajectories
+
+                    let expected =
+                        set [| -5L; -4; -3; 2; 3; 4; 5 |],
+                        set [| -1L; 0; 1; 2; 3; 4; 5 |],
+                        set [| -5L; -4; 0; 1; 2; 3; 4; 5 |]
+                    Assertions.test <@ actual = expected @>
+                }
+
                 test "firstTrajectoryWhereRelativeTrajectoriesAllIntersectOrigin gives correct trajectory" {
-                    let actual = PartTwo.firstTrajectoryWhereRelativeTrajectoriesAllIntersectOrigin sampleTrajectories
+                    let actual = PartTwo.firstTrajectoryWhereRelativeTrajectoriesAllIntersectOrigin 10 sampleTrajectories
 
                     let expected =
                         { InitialX = 24; InitialY = 13; InitialZ = 10; VelocityX = -3; VelocityY = 1; VelocityZ = 2 }
-                    Assertions.test <@ actual = expected @>
+                    Assertions.test <@ actual = Some expected @>
                 }
 
             ]
