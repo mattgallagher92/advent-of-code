@@ -43,28 +43,29 @@ let parse lines =
         let bs = parts.[1].Split(" ")
         [| for b in bs do a, b; b, a |])
     |> Array.groupBy fst
-    |> Array.map (fun (node, edges) -> node, edges |> Array.map snd)
+    // Assumes modules are only connected one-to-one, which is true of the input.
+    |> Array.map (fun (node, edges) -> node, edges |> Array.map (fun edge -> snd edge, 1))
     |> dict
 
 module PartOne =
 
-    let private cache = Dictionary<IDictionary<string, string array> * string * int, (string * string) array array>()
+    let private cache = Dictionary<IDictionary<string, (string * int) array> * string * int, (string * string) array array>()
 
-    let rec pathsOfLength (graph: IDictionary<string, string array>) startNode length : (string * string) array array =
+    let rec pathsOfLength (graph: IDictionary<string, (string * int) array>) startNode length : (string * string) array array =
         let neighbours = graph.[startNode]
         if length = 1 then
-            neighbours |> Array.map (fun n -> [| (startNode, n) |])
+            neighbours |> Array.collect (fun (n, c) -> Array.replicate c [| (startNode, n) |])
         else
             neighbours
-            |> Array.collect (fun n ->
+            |> Array.collect (fun (n, c) ->
                 pathsOfLength graph n (length - 1)
-                |> Array.map (fun p -> [| (startNode, n); yield! p |]))
+                |> Array.collect (fun p -> Array.replicate c [| (startNode, n); yield! p |]))
 
     /// Finds nodes that are connected by more than three independent paths (paths sharing no edges) of length up to
     /// maxPathLength in graph starting at startNode. Such nodes must be in the same partition as startNode (there must
     /// still be a connection even after cutting three wires), but this is not an exhaustive list of all nodes that will
     /// be in the same partition.
-    let findNodesInSamePartition maxPathLength (graph: IDictionary<string, string array>) startNode =
+    let findNodesInSamePartition maxPathLength (graph: IDictionary<string, (string * int) array>) startNode =
 
         let cycleFreePathsUpToMaxLength =
             [| 1 .. maxPathLength |]
@@ -78,7 +79,7 @@ module PartOne =
 
         let neighbourEdgeCounts =
             graph.Keys
-            |> Seq.collect (fun v -> graph.[v] |> Array.countBy id |> Array.map (fun (v', c) -> (v, v'), c))
+            |> Seq.collect (fun v -> graph.[v] |> Array.map (fun (v', c) -> (v, v'), c))
             |> dict
 
         // TODO: feels wildly inefficient!
@@ -111,26 +112,38 @@ module PartOne =
 
     /// Make a new (multi-) graph by condensing the nodes to a single node, maintaining the number of edges from the
     /// condensed node to other nodes. The output (and input) graphs can have multiple edges between the same two nodes.
-    let condense (graph: IDictionary<string, string array>) (nodes: string array) newLabel =
-        let connectedNodes =
-            nodes |> Array.collect (fun n -> graph.[n] |> Array.filter (fun x -> nodes |> Array.contains x |> not))
+    let condense (graph: IDictionary<string, (string * int) array>) (nodes: string array) newLabel =
 
         let d = Dictionary(graph)
+
         for node in nodes do
             d.Remove node |> ignore
+
         for n in d.Keys do
-            d.[n] <- d.[n] |> Array.map (fun x -> if nodes |> Array.contains x then newLabel else x)
-        d.Add(newLabel, connectedNodes)
+            d.[n] <-
+                d.[n]
+                |> Array.partition (fun (n, _) -> nodes |> Array.contains n)
+                |> fun (toRemove, others) ->
+                    [|
+                        if not (toRemove |> Array.isEmpty) then newLabel, toRemove |> Array.sumBy snd
+                        yield! others
+                    |]
+
+        let newConnections =
+            nodes
+            |> Array.collect (fun n -> graph.[n])
+            |> Array.groupBy fst
+            |> Array.choose (fun (n, cs) -> if nodes |> Array.contains n then None else Some (n, cs |> Array.sumBy snd))
+        d.Add(newLabel, newConnections)
 
         d
 
     /// Repeatedly condenses nodes with more than three connection to the given node into that node until there are no
     /// such nodes.
-    let rec shrink (graph: IDictionary<string, string array>) node =
+    let rec shrink (graph: IDictionary<string, (string * int) array>) node =
 
         let toShrink =
             graph.[node]
-            |> Array.countBy id
             |> Array.filter (fun (_, count) -> count > 3)
             |> Array.map fst
 
@@ -141,13 +154,12 @@ module PartOne =
             let newLabel = System.String.Join(";", toShrink)
             shrink (condense graph toShrink newLabel) newLabel
 
-    // TODO: consider representing edge multiplicity with string * int rather than repeated strings.
     let solve lines =
 
         // Make a graph of the connected components (nodes) and wires (edges).
         let graph = lines |> parse
 
-        let rec inner (graph: IDictionary<string, string array>) lastCondensed attemptCount =
+        let rec inner (graph: IDictionary<string, (string * int) array>) lastCondensed attemptCount =
 
             printfn $"%A{graph |> Seq.map (fun kvp -> kvp.Key, kvp.Value) |> Seq.toArray}"
 
@@ -233,21 +245,21 @@ module Test =
 
             let sampleGraph =
                 [|
-                    "jqt", [| "rhn"; "xhk"; "nvd"; "ntq" |]
-                    "rsh", [| "frs"; "pzl"; "lsr"; "rzs" |]
-                    "xhk", [| "hfx"; "jqt"; "rhn"; "bvb"; "ntq" |]
-                    "cmg", [| "qnr"; "nvd"; "lhk"; "bvb"; "rzs" |]
-                    "rhn", [| "xhk"; "bvb"; "hfx"; "jqt" |]
-                    "bvb", [| "xhk"; "hfx"; "cmg"; "rhn"; "ntq" |]
-                    "pzl", [| "lsr"; "hfx"; "nvd"; "rsh" |]
-                    "qnr", [| "nvd"; "cmg"; "rzs"; "frs" |]
-                    "ntq", [| "jqt"; "hfx"; "bvb"; "xhk" |]
-                    "nvd", [| "lhk"; "jqt"; "cmg"; "pzl"; "qnr" |]
-                    "lsr", [| "lhk"; "rsh"; "pzl"; "rzs"; "frs" |]
-                    "rzs", [| "qnr"; "cmg"; "lsr"; "rsh" |]
-                    "frs", [| "qnr"; "lhk"; "lsr"; "rsh" |]
-                    "hfx", [| "xhk"; "rhn"; "bvb"; "pzl"; "ntq" |]
-                    "lhk", [| "cmg"; "nvd"; "lsr"; "frs" |]
+                    "jqt", [| ("rhn", 1); ("xhk", 1); ("nvd", 1); ("ntq", 1) |]
+                    "rsh", [| ("frs", 1); ("pzl", 1); ("lsr", 1); ("rzs", 1) |]
+                    "xhk", [| ("hfx", 1); ("jqt", 1); ("rhn", 1); ("bvb", 1); ("ntq", 1) |]
+                    "cmg", [| ("qnr", 1); ("nvd", 1); ("lhk", 1); ("bvb", 1); ("rzs", 1) |]
+                    "rhn", [| ("xhk", 1); ("bvb", 1); ("hfx", 1); ("jqt", 1) |]
+                    "bvb", [| ("xhk", 1); ("hfx", 1); ("cmg", 1); ("rhn", 1); ("ntq", 1) |]
+                    "pzl", [| ("lsr", 1); ("hfx", 1); ("nvd", 1); ("rsh", 1) |]
+                    "qnr", [| ("nvd", 1); ("cmg", 1); ("rzs", 1); ("frs", 1) |]
+                    "ntq", [| ("jqt", 1); ("hfx", 1); ("bvb", 1); ("xhk", 1) |]
+                    "nvd", [| ("lhk", 1); ("jqt", 1); ("cmg", 1); ("pzl", 1); ("qnr", 1) |]
+                    "lsr", [| ("lhk", 1); ("rsh", 1); ("pzl", 1); ("rzs", 1); ("frs", 1) |]
+                    "rzs", [| ("qnr", 1); ("cmg", 1); ("lsr", 1); ("rsh", 1) |]
+                    "frs", [| ("qnr", 1); ("lhk", 1); ("lsr", 1); ("rsh", 1) |]
+                    "hfx", [| ("xhk", 1); ("rhn", 1); ("bvb", 1); ("pzl", 1); ("ntq", 1) |]
+                    "lhk", [| ("cmg", 1); ("nvd", 1); ("lsr", 1); ("frs", 1) |]
                 |]
                 |> dict
 
@@ -268,7 +280,8 @@ module Test =
                 let actual = PartOne.pathsOfLength sampleGraph "bvb" 2
 
                 let pathsThrough neighbour =
-                    sampleGraph.[neighbour] |> Array.map (fun n -> [| "bvb", neighbour; neighbour, n |])
+                    // Can ignore count because sample graph doesn't have repeated edges.
+                    sampleGraph.[neighbour] |> Array.map (fun (n, _) -> [| "bvb", neighbour; neighbour, n |])
 
                 let expected = [|
                     yield! pathsThrough "xhk"
@@ -309,7 +322,8 @@ module Test =
                             |> Seq.toArray
                             |> Array.map (fun kvp -> kvp.Key, kvp.Value)
 
-                        let pairsAreSame (x: string, xs: string array) (y, ys) = x = y && xs |> Array.containsSameElements ys
+                        let pairsAreSame (x: string, xs: (string * int) array) (y, ys) =
+                            x = y && xs |> Array.containsSameElements ys
                         <@ (actual :> _ seq |> Seq.toArray) |> Array.containsEquivalentElements pairsAreSame expected @>
                         |> Assertions.test
                     }
@@ -317,38 +331,38 @@ module Test =
                 inputResultsInExpectedOutput
                     [| "xhk"; "rhn" |]
                     [|
-                        "jqt", [| "xhk;rhn"; "xhk;rhn"; "nvd"; "ntq" |]
-                        "rsh", [| "frs"; "pzl"; "lsr"; "rzs" |]
-                        "xhk;rhn", [| "hfx"; "jqt"; "bvb"; "ntq"; "bvb"; "hfx"; "jqt" |]
-                        "cmg", [| "qnr"; "nvd"; "lhk"; "bvb"; "rzs" |]
-                        "bvb", [| "xhk;rhn"; "hfx"; "cmg"; "xhk;rhn"; "ntq" |]
-                        "pzl", [| "lsr"; "hfx"; "nvd"; "rsh" |]
-                        "qnr", [| "nvd"; "cmg"; "rzs"; "frs" |]
-                        "ntq", [| "jqt"; "hfx"; "bvb"; "xhk;rhn" |]
-                        "nvd", [| "lhk"; "jqt"; "cmg"; "pzl"; "qnr" |]
-                        "lsr", [| "lhk"; "rsh"; "pzl"; "rzs"; "frs" |]
-                        "rzs", [| "qnr"; "cmg"; "lsr"; "rsh" |]
-                        "frs", [| "qnr"; "lhk"; "lsr"; "rsh" |]
-                        "hfx", [| "xhk;rhn"; "xhk;rhn"; "bvb"; "pzl"; "ntq" |]
-                        "lhk", [| "cmg"; "nvd"; "lsr"; "frs" |]
+                        "jqt", [| ("xhk;rhn", 2); ("nvd", 1); ("ntq", 1) |]
+                        "rsh", [| ("frs", 1); ("pzl", 1); ("lsr", 1); ("rzs", 1) |]
+                        "xhk;rhn", [| ("hfx", 2); ("jqt", 2); ("bvb", 2); ("ntq", 1) |]
+                        "cmg", [| ("qnr", 1); ("nvd", 1); ("lhk", 1); ("bvb", 1); ("rzs", 1) |]
+                        "bvb", [| ("xhk;rhn", 2); ("hfx", 1); ("cmg", 1); ("ntq", 1) |]
+                        "pzl", [| ("lsr", 1); ("hfx", 1); ("nvd", 1); ("rsh", 1) |]
+                        "qnr", [| ("nvd", 1); ("cmg", 1); ("rzs", 1); ("frs", 1) |]
+                        "ntq", [| ("jqt", 1); ("hfx", 1); ("bvb", 1); ("xhk;rhn", 1) |]
+                        "nvd", [| ("lhk", 1); ("jqt", 1); ("cmg", 1); ("pzl", 1); ("qnr", 1) |]
+                        "lsr", [| ("lhk", 1); ("rsh", 1); ("pzl", 1); ("rzs", 1); ("frs", 1) |]
+                        "rzs", [| ("qnr", 1); ("cmg", 1); ("lsr", 1); ("rsh", 1) |]
+                        "frs", [| ("qnr", 1); ("lhk", 1); ("lsr", 1); ("rsh", 1) |]
+                        "hfx", [| ("xhk;rhn", 2); ("bvb", 1); ("pzl", 1); ("ntq", 1) |]
+                        "lhk", [| ("cmg", 1); ("nvd", 1); ("lsr", 1); ("frs", 1) |]
                     |]
 
                 inputResultsInExpectedOutput
                     [| "xhk"; "rhn"; "hfx" |]
                     [|
-                        "jqt", [| "xhk;rhn;hfx"; "xhk;rhn;hfx"; "nvd"; "ntq" |]
-                        "rsh", [| "frs"; "pzl"; "lsr"; "rzs" |]
-                        "xhk;rhn;hfx", [| "jqt"; "bvb"; "ntq"; "bvb"; "jqt"; "bvb"; "pzl"; "ntq" |]
-                        "cmg", [| "qnr"; "nvd"; "lhk"; "bvb"; "rzs" |]
-                        "bvb", [| "xhk;rhn;hfx"; "xhk;rhn;hfx"; "cmg"; "ntq"; "xhk;rhn;hfx" |]
-                        "pzl", [| "lsr"; "xhk;rhn;hfx"; "nvd"; "rsh" |]
-                        "qnr", [| "nvd"; "cmg"; "rzs"; "frs" |]
-                        "ntq", [| "jqt"; "xhk;rhn;hfx"; "bvb"; "xhk;rhn;hfx" |]
-                        "nvd", [| "lhk"; "jqt"; "cmg"; "pzl"; "qnr" |]
-                        "lsr", [| "lhk"; "rsh"; "pzl"; "rzs"; "frs" |]
-                        "rzs", [| "qnr"; "cmg"; "lsr"; "rsh" |]
-                        "frs", [| "qnr"; "lhk"; "lsr"; "rsh" |]
-                        "lhk", [| "cmg"; "nvd"; "lsr"; "frs" |]
+                        "jqt", [| ("xhk;rhn;hfx", 2); ("nvd", 1); ("ntq", 1) |]
+                        "rsh", [| ("frs", 1); ("pzl", 1); ("lsr", 1); ("rzs", 1) |]
+                        "xhk;rhn;hfx", [| ("jqt", 2); ("bvb", 3); ("ntq", 2); ("pzl", 1) |]
+                        "cmg", [| ("qnr", 1); ("nvd", 1); ("lhk", 1); ("bvb", 1); ("rzs", 1) |]
+                        "bvb", [| ("xhk;rhn;hfx", 3); ("cmg", 1); ("ntq", 1) |]
+                        "pzl", [| ("lsr", 1); ("xhk;rhn;hfx", 1); ("nvd", 1); ("rsh", 1) |]
+                        "qnr", [| ("nvd", 1); ("cmg", 1); ("rzs", 1); ("frs", 1) |]
+                        "ntq", [| ("jqt", 1); ("xhk;rhn;hfx", 2); ("bvb", 1) |]
+                        "nvd", [| ("lhk", 1); ("jqt", 1); ("cmg", 1); ("pzl", 1); ("qnr", 1) |]
+                        "lsr", [| ("lhk", 1); ("rsh", 1); ("pzl", 1); ("rzs", 1); ("frs", 1) |]
+                        "rzs", [| ("qnr", 1); ("cmg", 1); ("lsr", 1); ("rsh", 1) |]
+                        "frs", [| ("qnr", 1); ("lhk", 1); ("lsr", 1); ("rsh", 1) |]
+                        "lhk", [| ("cmg", 1); ("nvd", 1); ("lsr", 1); ("frs", 1) |]
                     |]
 
             ]
@@ -361,28 +375,66 @@ module Test =
 
         ]
 
+        testList "PartOne.pathsOfLength works with edge multiplicity" [
+
+            let graph =
+                [
+                    "a", [| ("b", 1); ("c", 2); ("d", 1) |]
+                    "b", [| ("a", 1); ("c", 1) |]
+                    "c", [| ("a", 2); ("b", 1); ("d", 1) |]
+                    "d", [| ("a", 1); ("c", 1) |]
+                ]
+                |> dict
+
+            test "Length 1" {
+                let actual = PartOne.pathsOfLength graph "a" 1
+
+                let expected = [| [| "a", "b" |]; [| "a", "c" |]; [| "a", "c" |]; [| "a", "d" |] |]
+                Assertions.test <@ actual |> Array.containsSameElements expected @>
+            }
+
+            test "Length 2" {
+                let actual = PartOne.pathsOfLength graph "a" 2
+
+                let expected = [|
+                    [| ("a", "b"); ("b", "a") |]
+                    [| ("a", "b"); ("b", "c") |]
+                    [| ("a", "c"); ("c", "a") |]
+                    [| ("a", "c"); ("c", "a") |]
+                    [| ("a", "c"); ("c", "b") |]
+                    [| ("a", "c"); ("c", "d") |]
+                    [| ("a", "c"); ("c", "a") |]
+                    [| ("a", "c"); ("c", "a") |]
+                    [| ("a", "c"); ("c", "b") |]
+                    [| ("a", "c"); ("c", "d") |]
+                    [| ("a", "d"); ("d", "a") |]
+                    [| ("a", "d"); ("d", "c") |]
+                |]
+                Assertions.test <@ actual |> Array.containsSameElements expected @>
+            }
+
+        ]
 
         testList "PartOne.shrink" [
 
             test "correct when only one shrink required" {
-                let graph =
-                    [ "a", [| "b"; "b"; "b"; "b"; "c" |]; "b", [| "a"; "a"; "a"; "a" |]; "c", [| "a" |] ] |> dict
+                let graph = [ "a", [| ("b", 4); ("c", 1) |]; "b", [| ("a", 4) |]; "c", [| ("a", 1) |] ] |> dict
 
                 let actual =
                     PartOne.shrink graph "a"
                     |> Seq.toArray
                     |> Array.map (fun kvp -> kvp.Key, kvp.Value)
 
-                Assertions.test <@ actual = [| "a;b", [| "c" |]; "c", [| "a;b" |] |] @>
+                Assertions.test <@ actual = [| "a;b", [| ("c", 1) |]; "c", [| ("a;b", 1) |] |] @>
             }
 
             test "correct when multiple shrinks required" {
                 let graph =
                     [
-                        "a", [| "b"; "b"; "b"; "b"; "c"; "c"; "d" |]
-                        "b", [| "a"; "a"; "a"; "a"; "c"; "c" |]
-                        "c", [| "a"; "a"; "b"; "b"; "d" |]
-                        "d", [| "a"; "c" |]
+                        "a", [| ("b", 4); ("c", 2); ("d", 1) |]
+                        "b", [| ("a", 4); ("c", 2) |]
+                        "c", [| ("a", 2); ("b", 2); ("d", 1) |]
+                        "d", [| ("a", 1); ("c", 1) |]
                     ]
                     |> dict
 
@@ -391,7 +443,7 @@ module Test =
                     |> Seq.toArray
                     |> Array.map (fun kvp -> kvp.Key, kvp.Value)
 
-                Assertions.test <@ actual = [| "a;b;c", [| "d"; "d" |]; "d", [| "a;b;c"; "a;b;c" |] |] @>
+                Assertions.test <@ actual = [| "a;b;c", [| ("d", 2) |]; "d", [| ("a;b;c", 2) |] |] @>
             }
 
         ]
