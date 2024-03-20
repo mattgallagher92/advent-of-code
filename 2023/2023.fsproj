@@ -7,6 +7,28 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Util.fs" />
+    <Compile Include="Day1.fs" />
+    <Compile Include="Day2.fs" />
+    <Compile Include="Day3.fs" />
+    <Compile Include="Day4.fs" />
+    <Compile Include="Day5.fs" />
+    <Compile Include="Day6.fs" />
+    <Compile Include="Day7.fs" />
+    <Compile Include="Day8.fs" />
+    <Compile Include="Day9.fs" />
+    <Compile Include="Day10.fs" />
+    <Compile Include="Day11.fs" />
+    <Compile Include="Day12.fs" />
+    <Compile Include="Day13.fs" />
+    <Compile Include="Day14.fs" />
+    <Compile Include="Day15.fs" />
+    <Compile Include="Day16.fs" />
+    <Compile Include="Day17.fs" />
+    <Compile Include="Day18.fs" />
+    <Compile Include="Day19.fs" />
+    <Compile Include="Day20.fs" />
+    <Compile Include="Day21.fs" />
     <Compile Include="Day22.fs" />
     <Compile Include="Day23.fs" />
     <Compile Include="Day24.fs" />
@@ -16,6 +38,7 @@
 
   <ItemGroup>
     <PackageReference Include="Expecto.FsCheck" Version="10.1.0" />
+    <PackageReference Include="FParsec" Version="1.1.1" />
     <PackageReference Include="MathNet.Numerics.FSharp" Version="5.0.0" />
     <PackageReference Include="Unquote" Version="7.0.0" />
   </ItemGroup>
