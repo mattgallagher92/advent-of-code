@@ -1,5 +1,7 @@
 module Day2
 
+open System
+
 module PartOne =
     open FsToolkit.ErrorHandling
 
@@ -10,7 +12,23 @@ module PartOne =
             |> Array.traverseOptionM Int32.tryParse
             |> Option.defaultWith (fun _ -> failwith $"Invalid line %s{line}"))
 
-    let classify (report: int array) = ()
+    type ReportClassificatoin =
+        | Safe
+        | Unsafe
+
+    let classify (report: int array) =
+        let differences = report |> Array.pairwise |> Array.map (fun (a, b) -> b - a)
+
+        let changesGradually =
+            differences |> Array.forall (fun x -> 0 < Math.Abs x && Math.Abs x < 4)
+
+        let changeIsMonotonic =
+            differences |> Array.map Math.Sign |> Array.distinct |> Array.length = 1
+
+        if changesGradually && changeIsMonotonic then
+            Safe
+        else
+            Unsafe
 
     let solve (lines: string array) = ()
 
@@ -29,15 +47,30 @@ module Test =
                 "1 3 6 7 9"
             |]
 
-            testCase "PartOne.parse works" (fun _ ->
-                let expected = [|
-                    [| 7; 6; 4; 2; 1 |]
-                    [| 1; 2; 7; 8; 9 |]
-                    [| 9; 7; 6; 2; 1 |]
-                    [| 1; 3; 2; 4; 5 |]
-                    [| 8; 6; 4; 4; 1 |]
-                    [| 1; 3; 6; 7; 9 |]
-                |]
+            let sampleReport1 = [| 7; 6; 4; 2; 1 |]
+            let sampleReport2 = [| 1; 2; 7; 8; 9 |]
+            let sampleReport3 = [| 9; 7; 6; 2; 1 |]
+            let sampleReport4 = [| 1; 3; 2; 4; 5 |]
+            let sampleReport5 = [| 8; 6; 4; 4; 1 |]
+            let sampleReport6 = [| 1; 3; 6; 7; 9 |]
 
-                test <@ PartOne.parse sampleInput = expected @>)
+            let sampleReports = [|
+                sampleReport1
+                sampleReport2
+                sampleReport3
+                sampleReport4
+                sampleReport5
+                sampleReport6
+            |]
+
+            testCase "PartOne.parse works on sample input" (fun _ ->
+                test <@ PartOne.parse sampleInput = sampleReports @>)
+
+            testCase "PartOne.classify works on sample input" (fun _ ->
+                test <@ PartOne.classify sampleReport1 = PartOne.Safe @>
+                test <@ PartOne.classify sampleReport2 = PartOne.Unsafe @>
+                test <@ PartOne.classify sampleReport3 = PartOne.Unsafe @>
+                test <@ PartOne.classify sampleReport4 = PartOne.Unsafe @>
+                test <@ PartOne.classify sampleReport5 = PartOne.Unsafe @>
+                test <@ PartOne.classify sampleReport6 = PartOne.Safe @>)
         ]
