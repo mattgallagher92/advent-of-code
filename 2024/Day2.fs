@@ -30,7 +30,8 @@ module PartOne =
         else
             Unsafe
 
-    let solve (lines: string array) = ()
+    let solve (lines: string array) =
+        lines |> parse |> Array.countBy classify |> Array.find (fst >> (=) Safe) |> snd
 
 module Test =
     open Expecto
@@ -73,4 +74,6 @@ module Test =
                 test <@ PartOne.classify sampleReport4 = PartOne.Unsafe @>
                 test <@ PartOne.classify sampleReport5 = PartOne.Unsafe @>
                 test <@ PartOne.classify sampleReport6 = PartOne.Safe @>)
+
+            testCase "PartOne.solve works on sample input" (fun _ -> test <@ PartOne.solve sampleInput = 2 @>)
         ]
