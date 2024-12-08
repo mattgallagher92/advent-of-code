@@ -19,6 +19,9 @@ module PartOne =
                 let g2 = m.Groups.Item 2 |> _.Value |> Int32.Parse
                 { X = g1; Y = g2 }))
 
+    let solve (lines: string array) =
+        lines |> parse |> Array.sumBy (fun m -> m.X * m.Y)
+
 module Test =
     open Expecto
     open Swensen.Unquote
@@ -31,4 +34,6 @@ module Test =
             testCase "PartOne.parse works with sample input" (fun _ ->
                 let expected = [| { X = 2; Y = 4 }; { X = 5; Y = 5 }; { X = 11; Y = 8 }; { X = 8; Y = 5 } |]
                 test <@ PartOne.parse [| sampleInput |] = expected @>)
+
+            testCase "PartOne.solve works with sample input" (fun _ -> test <@ PartOne.solve [| sampleInput |] = 161 @>)
         ]
