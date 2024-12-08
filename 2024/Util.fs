@@ -4,6 +4,12 @@ module Util
 open System
 
 [<RequireQualifiedAccess>]
+module Array =
+    /// Finds the indexes of all elements that match the given predicate.
+    let findAllIndexes predicate xs =
+        xs |> Array.indexed |> Array.filter (snd >> predicate) |> Array.map fst
+
+[<RequireQualifiedAccess>]
 module Int32 =
     let tryParse (s: string) =
         match Int32.TryParse s with

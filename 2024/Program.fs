@@ -3,11 +3,11 @@ open Expecto
 [<EntryPoint>]
 let main args =
 
-    Day3.Test.all |> runTestsWithCLIArgs [] args |> ignore
+    Day4.Test.all |> runTestsWithCLIArgs [] args |> ignore
 
-    let input = "./input/day03" |> System.IO.File.ReadAllLines
+    let input = "./input/day04" |> System.IO.File.ReadAllLines
 
-    input |> Day3.PartOne.solve |> printfn "Day 3 part one: %A"
-    input |> Day3.PartTwo.solve |> printfn "Day 3 part two: %A"
+    input |> Day4.PartOne.solve |> printfn "Day 4 part one: %A"
+    // input |> Day4.PartTwo.solve |> printfn "Day 3 part two: %A"
 
     0
