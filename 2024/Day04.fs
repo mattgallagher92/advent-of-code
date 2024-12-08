@@ -1,12 +1,23 @@
 module Day4
 
+let itemLocations item puzzle =
+    puzzle
+    |> Array.map (Array.findAllIndexes ((=) item))
+    |> Array.indexed
+    |> Array.collect (fun (row, cols) -> cols |> Array.map (fun col -> row, col))
+
+let isWithinPuzzleBounds puzzle (row, col) =
+    let width = puzzle |> Array.head |> Array.length
+    let height = puzzle.Length
+    -1 < row && row < height && -1 < col && col < width
+
+let indexesToChars (puzzle: char array array) indexes =
+    indexes |> Array.map (fun (row, col) -> puzzle.[row].[col])
+
 module PartOne =
 
     let lengthFourStringsStartingFrom puzzle (row, col) =
-        let isWithinBounds (row, col) =
-            let width = puzzle |> Array.head |> Array.length
-            let height = puzzle.Length
-            -1 < row && row < height && -1 < col && col < width
+        let isWithinBounds = isWithinPuzzleBounds puzzle
 
         [|
             let up = [| row; row - 1; row - 2; row - 3 |]
@@ -31,19 +42,33 @@ module PartOne =
     let solve (lines: string array) =
         let puzzle = lines |> Array.map Seq.toArray
 
-        let xLocations =
-            puzzle
-            |> Array.map (Array.findAllIndexes ((=) 'X'))
-            |> Array.indexed
-            |> Array.collect (fun (row, cols) -> cols |> Array.map (fun col -> row, col))
-
         let lengthFourStringsStartingFromAnX =
-            xLocations
+            ('X', puzzle)
+            ||> itemLocations
             |> Array.collect (lengthFourStringsStartingFrom puzzle)
-            |> Array.map (Array.map (fun (row, col) -> puzzle.[row].[col]))
+            |> Array.map (indexesToChars puzzle)
 
         lengthFourStringsStartingFromAnX
         |> Array.filter ((=) [| 'X'; 'M'; 'A'; 'S' |])
+        |> Array.length
+
+module PartTwo =
+
+    let solve (lines: string array) =
+        let puzzle = lines |> Array.map Seq.toArray
+        let isWithinBounds = isWithinPuzzleBounds puzzle
+
+        ('A', puzzle)
+        ||> itemLocations
+        |> Array.map (fun (r, c) ->
+            let tlToBr = [| r - 1, c - 1; r, c; r + 1, c + 1 |]
+            let blToTr = [| r + 1, c - 1; r, c; r - 1, c + 1 |]
+            tlToBr, blToTr)
+        |> Array.filter (fun (a, b) -> a |> Array.append b |> Array.forall isWithinBounds)
+        |> Array.map (fun (a, b) -> indexesToChars puzzle a, indexesToChars puzzle b)
+        |> Array.filter (fun (a, b) ->
+            (a = [| 'M'; 'A'; 'S' |] || a = [| 'S'; 'A'; 'M' |])
+            && (b = [| 'M'; 'A'; 'S' |] || b = [| 'S'; 'A'; 'M' |]))
         |> Array.length
 
 module Test =
@@ -52,20 +77,20 @@ module Test =
 
     let all =
         testList "Day 4" [
-            testList "PartOne" [
-                let sampleInput = [|
-                    "MMMSXXMASM"
-                    "MSAMXMSMSA"
-                    "AMXSXMAAMM"
-                    "MSAMASMSMX"
-                    "XMASAMXAMM"
-                    "XXAMMXXAMA"
-                    "SMSMSASXSS"
-                    "SAXAMASAAA"
-                    "MAMMMXMMMM"
-                    "MXMXAXMASX"
-                |]
+            let sampleInput = [|
+                "MMMSXXMASM"
+                "MSAMXMSMSA"
+                "AMXSXMAAMM"
+                "MSAMASMSMX"
+                "XMASAMXAMM"
+                "XXAMMXXAMA"
+                "SMSMSASXSS"
+                "SAXAMASAAA"
+                "MAMMMXMMMM"
+                "MXMXAXMASX"
+            |]
 
-                testCase "PartOne.solve works with sample input" (fun _ -> test <@ PartOne.solve sampleInput = 18 @>)
-            ]
+            testCase "PartOne.solve works with sample input" (fun _ -> test <@ PartOne.solve sampleInput = 18 @>)
+
+            testCase "PartTwo.solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 9 @>)
         ]
