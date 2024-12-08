@@ -8,6 +8,6 @@ let main args =
     let input = "./input/day03" |> System.IO.File.ReadAllLines
 
     input |> Day3.PartOne.solve |> printfn "Day 3 part one: %A"
-    // input |> Day3.PartTwo.solve |> printfn "Day 3 part two: %A"
+    input |> Day3.PartTwo.solve |> printfn "Day 3 part two: %A"
 
     0

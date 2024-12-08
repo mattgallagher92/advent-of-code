@@ -42,6 +42,16 @@ module PartTwo =
                 | 'd' :: 'o' :: _ -> Enable
                 | _ -> failwith $"Unexpected match: %s{m.Value}"))
 
+    let solve (lines: string array) =
+        ((0, true), parse lines)
+        ||> Array.fold (fun (sum, isEnabled) instruction ->
+            match instruction, isEnabled with
+            | Enable, _ -> sum, true
+            | Disable, _ -> sum, false
+            | Multiply { X = x; Y = y }, true -> sum + x * y, true
+            | Multiply _, false -> sum, false)
+        |> fst
+
 module Test =
     open Expecto
     open Swensen.Unquote
@@ -75,5 +85,8 @@ module Test =
                     |]
 
                     test <@ PartTwo.parse [| sampleInput |] = expected @>)
+
+                testCase "PartTwo.solve works with sample input" (fun _ ->
+                    test <@ PartTwo.solve [| sampleInput |] = 48 @>)
             ]
         ]
