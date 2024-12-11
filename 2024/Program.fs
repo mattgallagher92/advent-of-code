@@ -1,9 +1,19 @@
 open Expecto
 
+let tests includeUtil day =
+    testList "All" [
+        if includeUtil then
+            Graph.Tests.all
+
+        match day with
+        | 5 -> Day5.Test.all
+        | _ -> ()
+    ]
+
 [<EntryPoint>]
 let main args =
 
-    Day5.Test.all |> runTestsWithCLIArgs [] args |> ignore
+    tests true 5 |> runTestsWithCLIArgs [] args |> ignore
 
     let input = "./input/day05" |> System.IO.File.ReadAllLines
 

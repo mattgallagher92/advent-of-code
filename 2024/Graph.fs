@@ -2,39 +2,6 @@ module Graph
 
 open System.Collections.Generic
 
-// TODO: add tests
-// Test input:
-// (29, 13)
-// (47, 13)
-// (47, 29)
-// (47, 53)
-// (47, 61)
-// (53, 13)
-// (53, 29)
-// (61, 13)
-// (61, 29)
-// (61, 53)
-// (75, 13)
-// (75, 29)
-// (75, 47)
-// (75, 53)
-// (75, 61)
-// (97, 13)
-// (97, 29)
-// (97, 47)
-// (97, 53)
-// (97, 61)
-// (97, 75)
-// Expected output:
-// Graph keys: [|13; 29; 47; 53; 61; 75; 97|]
-// Adjacent to 13: [||]
-// Adjacent to 29: [|13|]
-// Adjacent to 47: [|13; 29; 53; 61|]
-// Adjacent to 53: [|13; 29|]
-// Adjacent to 61: [|13; 29; 53|]
-// Adjacent to 75: [|13; 29; 47; 53; 61|]
-// Adjacent to 97: [|13; 29; 47; 53; 61; 75|]
-
 /// Converts a graph represented as a list of edges (themselves represented as pairs where the first element is the
 /// start node and the second element is the end node) into the same graph represented as a dictionary from each node
 /// to an array of the nodes that can be reached from it along a single edge.
@@ -104,3 +71,51 @@ let topologicalSort (dag: IDictionary<'a, 'a array>) =
         visit n
 
     l
+
+module Tests =
+    open Expecto
+    open Swensen.Unquote
+
+    let all =
+        testList "Graph" [
+            testCase "edgeArrayToAdjacencyArrays works with example input" (fun _ ->
+                let edgeArray = [|
+                    29, 13
+                    47, 13
+                    47, 29
+                    47, 53
+                    47, 61
+                    53, 13
+                    53, 29
+                    61, 13
+                    61, 29
+                    61, 53
+                    75, 13
+                    75, 29
+                    75, 47
+                    75, 53
+                    75, 61
+                    97, 13
+                    97, 29
+                    97, 47
+                    97, 53
+                    97, 61
+                    97, 75
+                |]
+
+                let result = edgeArrayToAdjacencyArrays edgeArray
+
+                let expected =
+                    [|
+                        13, [||]
+                        29, [| 13 |]
+                        47, [| 13; 29; 53; 61 |]
+                        53, [| 13; 29 |]
+                        61, [| 13; 29; 53 |]
+                        75, [| 13; 29; 47; 53; 61 |]
+                        97, [| 13; 29; 47; 53; 61; 75 |]
+                    |]
+                    |> set
+
+                test <@ result |> Seq.map (fun kvp -> kvp.Key, kvp.Value) |> Set.ofSeq = expected @>)
+        ]
