@@ -56,6 +56,35 @@ module PartOne =
                    PageOrderingRules = rules
                } -> rules |> updatesSatisfyingAll updates |> Array.sumBy (fun u -> u[u.Length / 2])
 
+module PartTwo =
+
+    /// Given rules and an update, returns the update reordered to satisfy all given rules.
+    let makeSatisfyAll rules =
+        /// A graph, with an edge representing a rule that the head node must come before the tail node.
+        // Unfortunately, in the general case (and with the puzzle input that I have!), the graph is cyclic; we have
+        // to look at the subgraph for each update (to remove cycles) before we can order it according to the rules.
+        let rulesGraph =
+            rules
+            |> Array.map (fun r -> r.Before, r.After)
+            |> Graph.edgeArrayToAdjacencyArrays
+
+        fun (update: int array) -> rulesGraph |> Graph.subgraph update |> Graph.topologicalSort |> List.toArray
+
+    let solve (lines: string array) =
+        lines
+        |> parse
+        |> fun
+               {
+                   Updates = updates
+                   PageOrderingRules = rules
+               } ->
+            let satisfyingUpdates = rules |> updatesSatisfyingAll updates
+            let unsatisfying = updates |> Array.except satisfyingUpdates
+
+            unsatisfying
+            |> Array.map (makeSatisfyAll rules)
+            |> Array.sumBy (fun u -> u[u.Length / 2])
+
 module Test =
     open Expecto
     open Swensen.Unquote
@@ -139,4 +168,11 @@ module Test =
                 test <@ updatesSatisfyingAll expectedUpdates exptectedRules = expectedResult @>)
 
             testCase "PartOne.solve works with sample input" (fun _ -> test <@ PartOne.solve sampleInput = 143 @>)
+
+            testCase "PartTwo.makeSatisfyAll works with sample input" (fun _ ->
+                test <@ PartTwo.makeSatisfyAll exptectedRules expectedUpdates[3] = [| 97; 75; 47; 61; 53 |] @>
+                test <@ PartTwo.makeSatisfyAll exptectedRules expectedUpdates[4] = [| 61; 29; 13 |] @>
+                test <@ PartTwo.makeSatisfyAll exptectedRules expectedUpdates[5] = [| 97; 75; 47; 29; 13 |] @>)
+
+            testCase "PartTwo.solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 123 @>)
         ]
