@@ -90,3 +90,10 @@ module Test =
                     test <@ PartTwo.solve [| sampleInput |] = 48 @>)
             ]
         ]
+
+let dayFns = {
+    Tests = Test.all
+    ReadInput = System.IO.File.ReadAllLines
+    PartOne = PartOne.solve
+    PartTwo = PartTwo.solve
+}

@@ -49,3 +49,10 @@ module Test =
 
             testCase "PartTwo.solve works" (fun _ -> test <@ PartTwo.solve sampleInput = 31 @>)
         ]
+
+let dayFns = {
+    Tests = Test.all
+    ReadInput = System.IO.File.ReadAllLines
+    PartOne = PartOne.solve
+    PartTwo = PartTwo.solve
+}

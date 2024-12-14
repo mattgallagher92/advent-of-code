@@ -176,3 +176,10 @@ module Test =
 
             testCase "PartTwo.solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 123 @>)
         ]
+
+let dayFns = {
+    Tests = Test.all
+    ReadInput = System.IO.File.ReadAllLines
+    PartOne = PartOne.solve
+    PartTwo = PartTwo.solve
+}
