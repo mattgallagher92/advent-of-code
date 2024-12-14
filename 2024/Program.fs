@@ -20,7 +20,9 @@ let main args =
 
     let fns = dayFns day
 
-    fns.Tests |> runTestsWithCLIArgs [] rest |> ignore
+    testList "All" [ Graph.Tests.all; fns.Tests ]
+    |> runTestsWithCLIArgs [] rest
+    |> ignore
 
     // Files in ./input/ are fsproj content copied into the app context directory.
     let input = fns.ReadInput $"%s{System.AppContext.BaseDirectory}/input/day%02i{day}"
