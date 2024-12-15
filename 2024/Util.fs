@@ -4,10 +4,45 @@ module Util
 open System
 
 [<RequireQualifiedAccess>]
+module Seq =
+    /// Splits xs into a sequence of sequences, where the last item in each sequence satisfies predicate.
+    // TODO: add tests.
+    let splitAfterMatches predicate xs =
+        ((Seq.empty, Seq.empty), xs)
+        ||> Seq.fold (fun (previousSeqs, currentSeq) x ->
+            let newSeq = seq {
+                yield! currentSeq
+                yield x
+            }
+
+            if predicate x then
+                seq {
+                    yield! previousSeqs
+                    yield newSeq
+                },
+                Seq.empty
+            else
+                previousSeqs, newSeq)
+        |> fun (prev, curr) ->
+            if Seq.length curr = 0 then
+                prev
+            else
+                seq {
+                    yield! prev
+                    yield curr
+                }
+
+[<RequireQualifiedAccess>]
 module Array =
     /// Finds the indexes of all elements that match the given predicate.
     let findAllIndexes predicate xs =
         xs |> Array.indexed |> Array.filter (snd >> predicate) |> Array.map fst
+
+    /// Returns xs pairwise, with (last, None) as the final pair.
+    let eachWithNext xs = [|
+        yield! xs |> Array.pairwise |> Array.map (fun (a, b) -> a, Some b)
+        yield Array.last xs, None
+    |]
 
 [<RequireQualifiedAccess>]
 module Int32 =
