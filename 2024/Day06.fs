@@ -20,47 +20,61 @@ type MappedAreaState = {
     Heading: Direction
 }
 
+module MappedAreaState =
+
+    let posAhead { Position = row, col; Heading = d } =
+        match d with
+        | Up -> row - 1, col
+        | Right -> row, col + 1
+        | Down -> row + 1, col
+        | Left -> row, col - 1
+
 type GuardState =
     | InMap of MappedAreaState
     | LeftMap
+
+let parse (lines: string array) =
+    lines |> Array.map Seq.toArray |> array2D
 
 module PartOne =
 
     let nextState (map: char array2d) guardState =
         match guardState with
         | LeftMap -> LeftMap
-        | InMap { Position = row, col; Heading = d } ->
-            let posAhead =
-                match d with
-                | Up -> row - 1, col
-                | Right -> row, col + 1
-                | Down -> row + 1, col
-                | Left -> row, col - 1
+        | InMap state ->
+            let posAhead = MappedAreaState.posAhead state
 
             if Array2D.isWithinBounds map posAhead then
                 if posAhead ||> Array2D.get map = '#' then
                     InMap {
-                        Position = row, col
-                        Heading = Direction.next d
+                        state with
+                            Heading = Direction.next state.Heading
                     }
                 else
-                    InMap { Position = posAhead; Heading = d }
+                    InMap { state with Position = posAhead }
             else
                 LeftMap
 
-    let solve (lines: string array) =
-        let map = lines |> Array.map Seq.toArray |> array2D
-        let initialPos = map |> Array2D.findIndex ((=) '^')
-
+    let allGuardStates map =
         let generator state =
-            match nextState map state with
-            | InMap x -> Some(x.Position, InMap x)
+            match state with
+            | InMap x -> Some(x, nextState map state)
             | LeftMap -> None
 
-        InMap { Position = initialPos; Heading = Up }
+        InMap {
+            Position = map |> Array2D.findIndex ((=) '^')
+            Heading = Up
+        }
         |> List.unfold generator
-        |> List.distinct
-        |> List.length
+        |> List.toArray
+
+    let solve lines =
+        lines
+        |> parse
+        |> allGuardStates
+        |> Array.map _.Position
+        |> Array.distinct
+        |> Array.length
 
 module PartTwo =
 
