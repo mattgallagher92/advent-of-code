@@ -29,6 +29,13 @@ module MappedAreaState =
         | Down -> row + 1, col
         | Left -> row, col - 1
 
+    let posBehind { Position = row, col; Heading = d } =
+        match d with
+        | Up -> row + 1, col
+        | Right -> row, col - 1
+        | Down -> row - 1, col
+        | Left -> row, col + 1
+
 type GuardState =
     | InMap of MappedAreaState
     | LeftMap
@@ -92,6 +99,26 @@ module PartTwo =
         |> Seq.map (Seq.map fst >> Seq.toArray)
         |> Seq.toArray
 
+    /// The straight extended backwards until an obstacle is hit or the map is left.
+    let extend map straight =
+        let { Heading = d } as first = Array.head straight
+
+        let prev state =
+            let posBehind = MappedAreaState.posBehind state
+
+            posBehind
+            |> Array2D.tryGet map
+            |> Option.bind (fun c ->
+                match c with
+                | '#' -> None
+                | _ -> Some { Position = posBehind; Heading = d })
+
+        let generator x = x |> Option.map (fun x -> x, prev x)
+        // Go backwards one step at a time from first, then reverse the list so that it's as if it's going forwards.
+        let extension = List.unfold generator (Some first) |> List.rev
+        // Join the extension, which includes the first item of the straight to the rest of the straight.
+        Array.append (extension |> List.toArray) (Array.tail straight)
+
 module Test =
 
     open Expecto
@@ -119,27 +146,51 @@ module Test =
             ]
 
             testList "PartTwo" [
+                let moveUp col =
+                    Array.map (fun row -> { Position = row, col; Heading = Up })
+
+                let moveRight row =
+                    Array.map (fun col -> { Position = row, col; Heading = Right })
+
+                let moveDown col =
+                    Array.map (fun row -> { Position = row, col; Heading = Down })
+
+                let moveLeft row =
+                    Array.map (fun col -> { Position = row, col; Heading = Left })
+
                 testCase "straights works with sample map" (fun _ ->
                     let allGuardStates = PartOne.allGuardStates sampleMap
 
                     let result = PartTwo.straights allGuardStates
 
                     let expected = [|
-                        [| 6..-1..1 |] |> Array.map (fun row -> { Position = row, 4; Heading = Up })
-                        [| 4..+1..8 |] |> Array.map (fun col -> { Position = 1, col; Heading = Right })
-                        [| 1..+1..6 |] |> Array.map (fun row -> { Position = row, 8; Heading = Down })
-                        [| 8..-1..2 |] |> Array.map (fun col -> { Position = 6, col; Heading = Left })
+                        [| 6..-1..1 |] |> moveUp 4
+                        [| 4..+1..8 |] |> moveRight 1
+                        [| 1..+1..6 |] |> moveDown 8
+                        [| 8..-1..2 |] |> moveLeft 6
 
-                        [| 6..-1..4 |] |> Array.map (fun row -> { Position = row, 2; Heading = Up })
-                        [| 2..+1..6 |] |> Array.map (fun col -> { Position = 4, col; Heading = Right })
-                        [| 4..+1..8 |] |> Array.map (fun row -> { Position = row, 6; Heading = Down })
-                        [| 6..-1..1 |] |> Array.map (fun col -> { Position = 8, col; Heading = Left })
+                        [| 6..-1..4 |] |> moveUp 2
+                        [| 2..+1..6 |] |> moveRight 4
+                        [| 4..+1..8 |] |> moveDown 6
+                        [| 6..-1..1 |] |> moveLeft 8
 
-                        [| 8..-1..7 |] |> Array.map (fun row -> { Position = row, 1; Heading = Up })
-                        [| 1..+1..7 |] |> Array.map (fun col -> { Position = 7, col; Heading = Right })
-                        [| 7..+1..9 |] |> Array.map (fun row -> { Position = row, 7; Heading = Down })
+                        [| 8..-1..7 |] |> moveUp 1
+                        [| 1..+1..7 |] |> moveRight 7
+                        [| 7..+1..9 |] |> moveDown 7
                     |]
 
+                    test <@ result = expected @>)
+
+                testCase "extend works with sample map and extension off map" (fun _ ->
+                    let straight = [| 6..-1..1 |] |> moveUp 4
+                    let result = PartTwo.extend sampleMap straight
+                    let expected = [| 9..-1..1 |] |> moveUp 4
+                    test <@ result = expected @>)
+
+                testCase "extend works with sample map and extension into obstacle" (fun _ ->
+                    let straight = [| 4..+1..9 |] |> moveRight 6
+                    let result = PartTwo.extend sampleMap straight
+                    let expected = [| 2..+1..9 |] |> moveRight 6
                     test <@ result = expected @>)
 
             ]

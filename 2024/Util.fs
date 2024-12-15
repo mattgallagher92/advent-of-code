@@ -67,6 +67,12 @@ module Array2D =
         && col > -1
         && col < Array2D.length2 array2D
 
+    let tryGet array2D (row, col) =
+        if isWithinBounds array2D (row, col) then
+            (row, col) ||> Array2D.get array2D |> Some
+        else
+            None
+
     let row r array2D =
         [| 0 .. (array2D |> Array2D.length2) - 1 |]
         |> Array.map (fun c -> Array2D.get array2D r c)
