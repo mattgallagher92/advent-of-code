@@ -85,7 +85,6 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
     /// The guard states split into sections where the guard is moving in one direction.
     let straights guardStates =
         guardStates
@@ -118,6 +117,40 @@ module PartTwo =
         let extension = List.unfold generator (Some first) |> List.rev
         // Join the extension, which includes the first item of the straight to the rest of the straight.
         Array.append (extension |> List.toArray) (Array.tail straight)
+
+    // TODO: This doesn't work; it sends onto another point on the path, but need to only send to already visited points. New plan:
+    // Make a note of obstacles that have been hit so far.
+    // Use that to calculate the places where turning back in that direction would cause the obstacle to be hit in the same way (along the straight).
+    // Turn that into a list of states where a turn would cause a loop.
+    // For every point along the path, check if it's one of those points.
+    let validObstacleLocations map =
+        let allGuardStates = map |> PartOne.allGuardStates
+        let extendedStraights = allGuardStates |> straights |> Array.map (extend map)
+        let initialPos = allGuardStates |> Array.head |> _.Position
+
+        let posToWalkedStates = allGuardStates |> Array.groupBy _.Position |> dict
+
+        let posToStraightStates =
+            extendedStraights |> Array.collect id |> Array.groupBy _.Position |> dict
+
+        // A valid location for an obstacle is just ahead of the places where the guard's regular path intersects one
+        // of the extended straights and the guard is heading in the previous direction to the straight's direction,
+        // so long as that location is not the guard's start position.
+        allGuardStates
+        |> Array.filter (fun x -> x.Position <> initialPos)
+        |> Array.choose (fun walkedState ->
+            let straightHeadings =
+                posToStraightStates[walkedState.Position] |> Array.map _.Heading
+
+            printfn $"%A{walkedState.Position} %A{walkedState.Heading}, straights: %A{straightHeadings}"
+
+            if Array.contains (Direction.next walkedState.Heading) straightHeadings then
+                Some(MappedAreaState.posAhead walkedState)
+            else
+                None)
+
+    let solve lines =
+        lines |> parse |> validObstacleLocations |> Array.distinct |> Array.length
 
 module Test =
 
@@ -193,6 +226,12 @@ module Test =
                     let expected = [| 2..+1..9 |] |> moveRight 6
                     test <@ result = expected @>)
 
+                testCase "validObstacleLocations works with sample map" (fun _ ->
+                    let result = PartTwo.validObstacleLocations sampleMap
+                    let expected = [| 6, 3; 7, 6; 7, 7; 8, 1; 8, 3; 9, 7 |]
+                    test <@ Set result = Set expected @>)
+
+            // testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 6 @>)
             ]
         ]
 
