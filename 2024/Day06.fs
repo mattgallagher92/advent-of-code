@@ -99,7 +99,7 @@ module PartTwo =
 
         // TODO: just recurse from beginning rather than generating guard states first.
         (([], []), guardStates)
-        ||> Array.fold (fun (collisionLocations, potentialNewObstacleLocations) mapState ->
+        ||> Array.fold (fun (collisionStates, potentialNewObstacleLocations) mapState ->
             let next = PartOne.nextState map (InMap mapState)
 
             // Check whether the current state is a collision location.
@@ -107,10 +107,10 @@ module PartTwo =
                 match next with
                 | InMap next ->
                     if next.Heading <> mapState.Heading then
-                        mapState :: collisionLocations
+                        mapState :: collisionStates
                     else
-                        collisionLocations
-                | LeftMap -> collisionLocations
+                        collisionStates
+                | LeftMap -> collisionStates
 
             // Check whether we can send back to a previous collision.
             let newPotentials =
@@ -126,7 +126,13 @@ module PartTwo =
 
                     match nextObstacleToRight with
                     | Some nextOb ->
-                        if potentialNewObstacleLocations |> List.contains (r, nextOb) then
+                        if
+                            collisionStates
+                            |> List.contains {
+                                Position = r, nextOb - 1
+                                Heading = Right
+                            }
+                        then
                             (r - 1, c) :: potentialNewObstacleLocations
                         else
                             potentialNewObstacleLocations
@@ -142,7 +148,13 @@ module PartTwo =
 
                     match nextObstacleDown with
                     | Some nextOb ->
-                        if potentialNewObstacleLocations |> List.contains (nextOb, c) then
+                        if
+                            collisionStates
+                            |> List.contains {
+                                Position = nextOb - 1, c
+                                Heading = Down
+                            }
+                        then
                             (r, c + 1) :: potentialNewObstacleLocations
                         else
                             potentialNewObstacleLocations
@@ -158,7 +170,13 @@ module PartTwo =
 
                     match nextObstacleToLeft with
                     | Some nextOb ->
-                        if potentialNewObstacleLocations |> List.contains (r, nextOb) then
+                        if
+                            collisionStates
+                            |> List.contains {
+                                Position = r, nextOb + 1
+                                Heading = Left
+                            }
+                        then
                             (r + 1, c) :: potentialNewObstacleLocations
                         else
                             potentialNewObstacleLocations
@@ -174,7 +192,13 @@ module PartTwo =
 
                     match nextObstacleUp with
                     | Some nextOb ->
-                        if potentialNewObstacleLocations |> List.contains (nextOb, c) then
+                        if
+                            collisionStates
+                            |> List.contains {
+                                Position = nextOb + 1, c
+                                Heading = Up
+                            }
+                        then
                             (r, c - 1) :: potentialNewObstacleLocations
                         else
                             potentialNewObstacleLocations
@@ -183,6 +207,7 @@ module PartTwo =
             newCollisions, newPotentials)
         |> snd
 
+    // Answer is not 336.
     let solve (lines: string array) =
         let map = lines |> parse
         let guardStates = PartOne.allGuardStates map
@@ -238,6 +263,10 @@ module Test =
 
                     test <@ result = expected @>)
 
+                testCase "validObstacleLocations works with sample map" (fun _ ->
+                    let result = PartTwo.doIt sampleMap (PartOne.allGuardStates sampleMap)
+                    let expected = [| 6, 3; 7, 6; 7, 7; 8, 1; 8, 3; 9, 7 |]
+                    test <@ Set result = Set expected @>)
             ]
         ]
 
