@@ -93,9 +93,15 @@ module PartTwo =
 
     let doIt map (guardStates: MappedAreaState array) =
 
-        // TODO: pre-filter down to '#' locations?
-        let rows = map |> Array2D.rows
-        let cols = map |> Array2D.columns
+        let rowObstacleIxs =
+            map
+            |> Array2D.rows
+            |> Array.map (Array.indexed >> Array.filter (snd >> (=) '#') >> Array.map fst)
+
+        let colObstaclesIxs =
+            map
+            |> Array2D.columns
+            |> Array.map (Array.indexed >> Array.filter (snd >> (=) '#') >> Array.map fst)
 
         // TODO: just recurse from beginning rather than generating guard states first.
         (([], []), guardStates)
@@ -121,25 +127,21 @@ module PartTwo =
                 let nextObstacleInNextDirection { Heading = h; Position = r, c } =
                     match Direction.next h with
                     | Right ->
-                        rows[r]
-                        |> Array.indexed
-                        |> Array.tryFind (fun (i, ch) -> i > c && ch = '#')
-                        |> Option.map (fun (i, _) -> r, i)
+                        rowObstacleIxs[r]
+                        |> Array.tryFind (fun i -> i > c)
+                        |> Option.map (fun i -> r, i)
                     | Down ->
-                        cols[c]
-                        |> Array.indexed
-                        |> Array.tryFind (fun (i, ch) -> i > r && ch = '#')
-                        |> Option.map (fun (i, _) -> i, c)
+                        colObstaclesIxs[c]
+                        |> Array.tryFind (fun i -> i > r)
+                        |> Option.map (fun i -> i, c)
                     | Left ->
-                        rows[r]
-                        |> Array.indexed
-                        |> Array.tryFindBack (fun (i, ch) -> i < c && ch = '#')
-                        |> Option.map (fun (i, _) -> r, i)
+                        rowObstacleIxs[r]
+                        |> Array.tryFindBack (fun i -> i < c)
+                        |> Option.map (fun i -> r, i)
                     | Up ->
-                        cols[c]
-                        |> Array.indexed
-                        |> Array.tryFindBack (fun (i, ch) -> i < r && ch = '#')
-                        |> Option.map (fun (i, _) -> i, c)
+                        colObstaclesIxs[c]
+                        |> Array.tryFindBack (fun i -> i < r)
+                        |> Option.map (fun i -> i, c)
                     |> Option.map (fun p -> {
                         Heading = Direction.next h
                         Position = p
