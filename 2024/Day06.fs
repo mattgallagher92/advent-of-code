@@ -78,7 +78,6 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
     /// The guard states split into sections where the guard is moving in one direction.
     let straights guardStates =
         guardStates
@@ -91,6 +90,103 @@ module PartTwo =
             | None -> false)
         |> Seq.map (Seq.map fst >> Seq.toArray)
         |> Seq.toArray
+
+    let doIt map (guardStates: MappedAreaState array) =
+
+        // TODO: pre-filter down to '#' locations?
+        let rows = map |> Array2D.rows
+        let cols = map |> Array2D.columns
+
+        // TODO: just recurse from beginning rather than generating guard states first.
+        (([], []), guardStates)
+        ||> Array.fold (fun (collisionLocations, potentialNewObstacleLocations) mapState ->
+            let next = PartOne.nextState map (InMap mapState)
+
+            // Check whether the current state is a collision location.
+            let newCollisions =
+                match next with
+                | InMap next ->
+                    if next.Heading <> mapState.Heading then
+                        mapState :: collisionLocations
+                    else
+                        collisionLocations
+                | LeftMap -> collisionLocations
+
+            // Check whether we can send back to a previous collision.
+            let newPotentials =
+                match mapState with
+                | { Heading = Up; Position = r, c } ->
+                    let row = rows[r]
+
+                    let nextObstacleToRight =
+                        row
+                        |> Array.indexed
+                        |> Array.tryFind (fun (i, ch) -> i > c && ch = '#')
+                        |> Option.map fst
+
+                    match nextObstacleToRight with
+                    | Some nextOb ->
+                        if potentialNewObstacleLocations |> List.contains (r, nextOb) then
+                            (r - 1, c) :: potentialNewObstacleLocations
+                        else
+                            potentialNewObstacleLocations
+                    | None -> potentialNewObstacleLocations
+                | { Heading = Right; Position = r, c } ->
+                    let col = cols[c]
+
+                    let nextObstacleDown =
+                        col
+                        |> Array.indexed
+                        |> Array.tryFind (fun (i, ch) -> i > r && ch = '#')
+                        |> Option.map fst
+
+                    match nextObstacleDown with
+                    | Some nextOb ->
+                        if potentialNewObstacleLocations |> List.contains (nextOb, c) then
+                            (r, c + 1) :: potentialNewObstacleLocations
+                        else
+                            potentialNewObstacleLocations
+                    | None -> potentialNewObstacleLocations
+                | { Heading = Down; Position = r, c } ->
+                    let row = rows[r]
+
+                    let nextObstacleToLeft =
+                        row
+                        |> Array.indexed
+                        |> Array.tryFindBack (fun (i, ch) -> i < c && ch = '#')
+                        |> Option.map fst
+
+                    match nextObstacleToLeft with
+                    | Some nextOb ->
+                        if potentialNewObstacleLocations |> List.contains (r, nextOb) then
+                            (r + 1, c) :: potentialNewObstacleLocations
+                        else
+                            potentialNewObstacleLocations
+                    | None -> potentialNewObstacleLocations
+                | { Heading = Left; Position = r, c } ->
+                    let col = cols[c]
+
+                    let nextObstacleUp =
+                        col
+                        |> Array.indexed
+                        |> Array.tryFind (fun (i, ch) -> i < r && ch = '#')
+                        |> Option.map fst
+
+                    match nextObstacleUp with
+                    | Some nextOb ->
+                        if potentialNewObstacleLocations |> List.contains (nextOb, c) then
+                            (r, c - 1) :: potentialNewObstacleLocations
+                        else
+                            potentialNewObstacleLocations
+                    | None -> potentialNewObstacleLocations
+
+            newCollisions, newPotentials)
+        |> snd
+
+    let solve (lines: string array) =
+        let map = lines |> parse
+        let guardStates = PartOne.allGuardStates map
+        doIt map guardStates |> List.length
 
 module Test =
 
