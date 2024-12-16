@@ -107,107 +107,57 @@ module PartTwo =
                 match next with
                 | InMap next ->
                     if next.Heading <> mapState.Heading then
-                        mapState :: collisionStates
+                        {
+                            mapState with
+                                Position = MappedAreaState.posAhead mapState
+                        }
+                        :: collisionStates
                     else
                         collisionStates
                 | LeftMap -> collisionStates
 
             // Check whether we can send back to a previous collision.
             let newPotentials =
-                match mapState with
-                | { Heading = Up; Position = r, c } ->
-                    let row = rows[r]
-
-                    let nextObstacleToRight =
-                        row
+                let nextObstacleInNextDirection { Heading = h; Position = r, c } =
+                    match Direction.next h with
+                    | Right ->
+                        rows[r]
                         |> Array.indexed
                         |> Array.tryFind (fun (i, ch) -> i > c && ch = '#')
-                        |> Option.map fst
-
-                    match nextObstacleToRight with
-                    | Some nextOb ->
-                        if
-                            collisionStates
-                            |> List.contains {
-                                Position = r, nextOb - 1
-                                Heading = Right
-                            }
-                        then
-                            (r - 1, c) :: potentialNewObstacleLocations
-                        else
-                            potentialNewObstacleLocations
-                    | None -> potentialNewObstacleLocations
-                | { Heading = Right; Position = r, c } ->
-                    let col = cols[c]
-
-                    let nextObstacleDown =
-                        col
+                        |> Option.map (fun (i, _) -> r, i)
+                    | Down ->
+                        cols[c]
                         |> Array.indexed
                         |> Array.tryFind (fun (i, ch) -> i > r && ch = '#')
-                        |> Option.map fst
-
-                    match nextObstacleDown with
-                    | Some nextOb ->
-                        if
-                            collisionStates
-                            |> List.contains {
-                                Position = nextOb - 1, c
-                                Heading = Down
-                            }
-                        then
-                            (r, c + 1) :: potentialNewObstacleLocations
-                        else
-                            potentialNewObstacleLocations
-                    | None -> potentialNewObstacleLocations
-                | { Heading = Down; Position = r, c } ->
-                    let row = rows[r]
-
-                    let nextObstacleToLeft =
-                        row
+                        |> Option.map (fun (i, _) -> i, c)
+                    | Left ->
+                        rows[r]
                         |> Array.indexed
                         |> Array.tryFindBack (fun (i, ch) -> i < c && ch = '#')
-                        |> Option.map fst
-
-                    match nextObstacleToLeft with
-                    | Some nextOb ->
-                        if
-                            collisionStates
-                            |> List.contains {
-                                Position = r, nextOb + 1
-                                Heading = Left
-                            }
-                        then
-                            (r + 1, c) :: potentialNewObstacleLocations
-                        else
-                            potentialNewObstacleLocations
-                    | None -> potentialNewObstacleLocations
-                | { Heading = Left; Position = r, c } ->
-                    let col = cols[c]
-
-                    let nextObstacleUp =
-                        col
+                        |> Option.map (fun (i, _) -> r, i)
+                    | Up ->
+                        cols[c]
                         |> Array.indexed
-                        |> Array.tryFind (fun (i, ch) -> i < r && ch = '#')
-                        |> Option.map fst
+                        |> Array.tryFindBack (fun (i, ch) -> i < r && ch = '#')
+                        |> Option.map (fun (i, _) -> i, c)
+                    |> Option.map (fun p -> {
+                        Heading = Direction.next h
+                        Position = p
+                    })
 
-                    match nextObstacleUp with
-                    | Some nextOb ->
-                        if
-                            collisionStates
-                            |> List.contains {
-                                Position = nextOb + 1, c
-                                Heading = Up
-                            }
-                        then
-                            (r, c - 1) :: potentialNewObstacleLocations
-                        else
-                            potentialNewObstacleLocations
-                    | None -> potentialNewObstacleLocations
+                match nextObstacleInNextDirection mapState with
+                | Some nextOb ->
+                    if collisionStates |> List.contains nextOb then
+                        MappedAreaState.posAhead mapState :: potentialNewObstacleLocations
+                    else
+                        potentialNewObstacleLocations
+                | None -> potentialNewObstacleLocations
 
             newCollisions, newPotentials)
         |> snd
 
     // Answer is not 336.
+    // Answer is not 428.
     let solve (lines: string array) =
         let map = lines |> parse
         let guardStates = PartOne.allGuardStates map
