@@ -9,6 +9,9 @@ module Array =
     let findAllIndexes predicate xs =
         xs |> Array.indexed |> Array.filter (snd >> predicate) |> Array.map fst
 
+    let mapSnd f pairs =
+        pairs |> Array.map (fun (x, y) -> x, f y)
+
 [<RequireQualifiedAccess>]
 module Int32 =
     let tryParse (s: string) =
@@ -62,3 +65,7 @@ module Array2D =
         array2D
         |> tryFindIndex predicate
         |> Option.defaultWith (fun _ -> failwith "No matching value.")
+
+    let updateAt r c newVal source =
+        let newRow = row r source |> Array.updateAt c newVal
+        source |> rows |> Array.updateAt r newRow |> array2D
