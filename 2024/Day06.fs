@@ -91,6 +91,8 @@ module PartTwo =
         |> Seq.map (Seq.map fst >> Seq.toArray)
         |> Seq.toArray
 
+    // TODO: this only checks whether they'll next hit an obstacle that they've already hit, but that's not enough.
+    // They could hit an obstacle that they've already hit after a bunch of intermediate new hits.
     let doIt map (guardStates: MappedAreaState array) =
 
         let rowObstacleIxs =
@@ -163,7 +165,14 @@ module PartTwo =
     let solve (lines: string array) =
         let map = lines |> parse
         let guardStates = PartOne.allGuardStates map
-        doIt map guardStates |> List.length
+
+        doIt map guardStates
+        |> fun y ->
+            for x in y do
+                printfn $"{x}"
+
+            y
+        |> List.length
 
 module Test =
 
