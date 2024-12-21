@@ -1,0 +1,38 @@
+module DayN
+
+module PartOne =
+
+    let solve (lines: string array) = -1L
+
+module PartTwo =
+
+    let solve (lines: string array) = -1L
+
+module Test =
+
+    open Expecto
+    open Swensen.Unquote
+
+    let all =
+        testList "DayN" [
+            let sampleInput = [|
+
+            |]
+
+            testList "PartOne" [
+                testCase "solve works with sample input" (fun _ ->
+                    test <@ PartOne.solve sampleInput = -1L @>)
+            ]
+
+            testList "PartTwo" [
+                testCase "solve works with sample input" (fun _ ->
+                    test <@ PartTwo.solve sampleInput = -1L @>)
+            ]
+        ]
+
+let dayFns = {
+    Tests = Test.all
+    ReadInput = System.IO.File.ReadAllLines
+    PartOne = PartOne.solve
+    PartTwo = PartTwo.solve
+}
