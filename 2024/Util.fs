@@ -27,6 +27,11 @@ type Collections.Generic.IDictionary<'a, 'b> with
         | false, _ -> None
 
 [<RequireQualifiedAccess>]
+module Pair =
+
+    let asArray (x, y) = [| x; y |]
+
+[<RequireQualifiedAccess>]
 module Array2D =
 
     let isWithinBounds array2D (row, col) =
@@ -50,6 +55,12 @@ module Array2D =
     let columns array2D =
         [| 0 .. (array2D |> Array2D.length2) - 1 |]
         |> Array.map (fun c -> column c array2D)
+
+    let indexed array2D =
+        array2D
+        |> rows
+        |> Array.indexed
+        |> Array.collect (fun (r, vs) -> vs |> Array.mapi (fun c v -> (r, c), v))
 
     // TODO: add tests.
     let tryFindIndex predicate array2D =
