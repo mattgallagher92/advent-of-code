@@ -15,19 +15,30 @@ let parse (lines: string array) =
             Numbers = tokens[1].Trim().Split ' ' |> Array.map int64
         })
 
+let couldBeTrue (operators: (int64 -> int64 -> int64) array) equation =
+    ([| Array.head equation.Numbers |], Array.tail equation.Numbers)
+    ||> Array.fold (fun possibleVals n ->
+        possibleVals
+        |> Array.collect (fun v -> operators |> Array.map (fun op -> op v n)))
+    |> Array.exists ((=) equation.TestValue)
+
+let solve filter lines =
+    lines |> parse |> Array.filter filter |> Array.sumBy _.TestValue
+
 module PartOne =
 
-    let couldBeTrue equation =
-        ([| Array.head equation.Numbers |], Array.tail equation.Numbers)
-        ||> Array.fold (fun possibleVals n -> possibleVals |> Array.collect (fun v -> [| v + n; v * n |]))
-        |> Array.exists ((=) equation.TestValue)
+    let couldBeTrue = couldBeTrue [| (+); (*) |]
 
-    let solve (lines: string array) =
-        lines |> parse |> Array.filter couldBeTrue |> Array.sumBy _.TestValue
+    let solve = solve couldBeTrue
 
 module PartTwo =
 
-    let solve (lines: string array) = -1L
+    // Hacky but works.
+    let (||!) i j = int64 $"%i{i}%i{j}"
+
+    let couldBeTrue = couldBeTrue [| (+); (*); (||!) |]
+
+    let solve = solve couldBeTrue
 
 module Test =
 
@@ -53,7 +64,7 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 11387 @>)
             ]
         ]
 
