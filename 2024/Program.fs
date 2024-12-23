@@ -23,12 +23,13 @@ let main args =
 
     let fns = dayFns day
 
-    testList "All" [ Graph.Tests.all; fns.Tests ]
+    testList "All" [ testList $"Day %i{day} util tests" fns.UtilTests; fns.Tests ]
     |> runTestsWithCLIArgs [] rest
     |> ignore
 
     // Files in ./input/ are fsproj content copied into the app context directory.
-    let input = fns.ReadInput $"%s{System.AppContext.BaseDirectory}/input/day%02i{day}"
+    let input =
+        System.IO.File.ReadAllLines $"%s{System.AppContext.BaseDirectory}/input/day%02i{day}"
 
     input |> fns.PartOne |> printfn "Day %i part one: %A" day
     input |> fns.PartTwo |> printfn "Day %i part two: %A" day

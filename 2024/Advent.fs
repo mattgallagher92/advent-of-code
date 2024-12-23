@@ -1,9 +1,9 @@
 [<AutoOpen>]
 module Advent
 
-type DayFunctions<'input> = {
+type DayFunctions = {
     Tests: Expecto.Test
-    ReadInput: string -> 'input
-    PartOne: 'input -> int64
-    PartTwo: 'input -> int64
+    UtilTests: Expecto.Test list
+    PartOne: string array -> int64
+    PartTwo: string array -> int64
 }

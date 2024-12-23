@@ -93,7 +93,7 @@ module Test =
 
 let dayFns = {
     Tests = Test.all
-    ReadInput = System.IO.File.ReadAllLines
+    UtilTests = []
     PartOne = PartOne.solve >> int64
     PartTwo = PartTwo.solve >> int64
 }
