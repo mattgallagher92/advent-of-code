@@ -23,9 +23,6 @@ let parse (input: string) =
 
     disk
 
-let checksum disk =
-    disk |> Array.indexed |> Array.sumBy (fun (i, f: int64) -> int64 i * f)
-
 module PartOne =
 
     let defragment fragmentedDisk =
@@ -57,12 +54,28 @@ module PartOne =
 
         defragmentedDisk
 
+    let checksum disk =
+        disk |> Array.indexed |> Array.sumBy (fun (i, f: int64) -> int64 i * f)
+
     let solve (input: string) =
         input |> parse |> defragment |> checksum
 
 module PartTwo =
 
-    let solve (input: string) = -1
+    let defragment fragmentedDisk =
+        let defragmentedDisk = Array.copy fragmentedDisk
+        defragmentedDisk
+
+    let checksum disk =
+        disk
+        |> Array.indexed
+        |> Array.sumBy (fun (i, f) ->
+            match f with
+            | FreeSpace -> 0L
+            | FileBlock fbi -> int64 i * fbi)
+
+    let solve (input: string) =
+        input |> parse |> defragment |> checksum
 
 module Test =
 
@@ -159,7 +172,7 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 2858 @>)
             ]
         ]
 
