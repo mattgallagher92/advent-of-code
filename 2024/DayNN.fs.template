@@ -2,11 +2,11 @@ module DayN
 
 module PartOne =
 
-    let solve (lines: string array) = -1L
+    let solve (lines: string array) = -1
 
 module PartTwo =
 
-    let solve (lines: string array) = -1L
+    let solve (lines: string array) = -1
 
 module Test =
 
@@ -21,18 +21,18 @@ module Test =
 
             testList "PartOne" [
                 testCase "solve works with sample input" (fun _ ->
-                    test <@ PartOne.solve sampleInput = -1L @>)
+                    test <@ PartOne.solve sampleInput = -1 @>)
             ]
 
             testList "PartTwo" [
                 testCase "solve works with sample input" (fun _ ->
-                    test <@ PartTwo.solve sampleInput = -1L @>)
+                    test <@ PartTwo.solve sampleInput = -1 @>)
             ]
         ]
 
 let dayFns = {
     Tests = Test.all
     UtilTests = []
-    PartOne = PartOne.solve
-    PartTwo = PartTwo.solve
+    PartOne = PartOne.solve >> int64
+    PartTwo = PartTwo.solve >> int64
 }
