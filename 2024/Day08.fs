@@ -33,6 +33,10 @@ module PartOne =
 
 module PartTwo =
 
+    // NOTE: finds locations that are an integer multiple of the displacement of the distance between the points.
+    // There could be nodes at a fractional multiple if the components of the displacement are not coprime. For example,
+    // if the pair is (5, 5) and (8, 8), (6, 6) and (7, 7) are in line with them, but this function doesn't return them.
+    // In practice, there are no such cases in the examples on the problem page, and this works for my puzzle input 🤷
     let antinodesProducedByPair map ((r1, c1), (r2, c2)) =
         let dr, dc = r2 - r1, c2 - c1
 
