@@ -77,6 +77,16 @@ module Array2D =
         |> tryFindIndex predicate
         |> Option.defaultWith (fun _ -> failwith "No matching value.")
 
+    let findAllIndexes predicate array2D =
+        array2D
+        |> rows
+        |> Array.indexed
+        |> Array.collect (fun (r, vs) -> vs |> Array.findAllIndexes predicate |> Array.map (fun c -> r, c))
+
+    let adjacentIndexes array2D (r, c) =
+        [| r - 1, c; r, c - 1; r, c + 1; r + 1, c |]
+        |> Array.filter (isWithinBounds array2D)
+
     let updateAt r c newVal source =
         let newRow = row r source |> Array.updateAt c newVal
         source |> rows |> Array.updateAt r newRow |> array2D
