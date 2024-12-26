@@ -36,7 +36,37 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    open System.Collections.Generic
+
+    [<TailCall>]
+    let rec private inner map n (nPlusOneLocationsToDistinctTrails: IDictionary<int * int, Set<(int * int) list>>) =
+        if n = -1 then
+            nPlusOneLocationsToDistinctTrails
+        else
+            map
+            |> nLocations n
+            |> Array.map (fun nLocation ->
+                nLocation
+                |> Array2D.adjacentIndexes map
+                |> Array.collect (
+                    nPlusOneLocationsToDistinctTrails.TryGet
+                    >> Option.map (Set.map (fun trail -> nLocation :: trail))
+                    >> Option.toArray
+                )
+                |> Set.unionMany
+                |> fun distinctTrails -> nLocation, distinctTrails)
+            |> dict
+            |> inner map (n - 1)
+
+    let trailHeadsToDistinctTrails map =
+        map
+        |> nLocations 9
+        |> Array.map (fun l -> l, set [ [ l ] ])
+        |> dict
+        |> inner map 8
+
+    let solve (lines: string array) =
+        lines |> parse |> trailHeadsToDistinctTrails |> Seq.sumBy (_.Value >> Set.count)
 
 module Test =
 
@@ -65,7 +95,7 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 81 @>)
             ]
         ]
 
