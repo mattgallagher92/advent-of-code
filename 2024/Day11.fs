@@ -24,53 +24,41 @@ module PartOne =
 
 module PartTwo =
 
-    open System.Collections.Generic
+    let cache = System.Collections.Generic.Dictionary<int * int64, int64>()
 
-    [<Literal>]
-    let maxBlinks = 75
+    let rec numberOfStonesAfterBlinks blinks startStone =
 
-    /// Stone to list of arrays produced at each successive iteration, in reverse order.
-    let cache = Dictionary<int64, int64 array list>()
+        cache.TryGet(blinks, startStone)
+        |> Option.defaultWith (fun _ ->
+            let f1 = numberOfStonesAfterBlinks (blinks - 1)
+            let f3 = numberOfStonesAfterBlinks (blinks - 3)
+            let f4 = numberOfStonesAfterBlinks (blinks - 4)
+            let f5 = numberOfStonesAfterBlinks (blinks - 5)
 
-    // TODO: add explanatory comments.
-    let rec stonesAfterBlinks n startStone =
-        match n, cache.TryGet startStone with
-        | 1, _ -> [ successors startStone ]
-        | _, Some result when result.Length >= n ->
-            // Want last n elements.
-            result |> List.skip (result.Length - n)
-        | _, Some result ->
-            let iterationsCached = result.Length
+            let result =
+                match blinks, startStone with
+                | 0, _ -> 1L
+                | _, 0L -> f1 1
+                | _, 1L when blinks > 2 -> [| 2; 0; 2; 4 |] |> Array.sumBy (int64 >> f3)
+                | _, 2L when blinks > 2 -> [| 4; 0; 4; 8 |] |> Array.sumBy (int64 >> f3)
+                | _, 3L when blinks > 2 -> [| 6; 0; 7; 2 |] |> Array.sumBy (int64 >> f3)
+                | _, 4L when blinks > 2 -> [| 8; 0; 9; 6 |] |> Array.sumBy (int64 >> f3)
+                | _, 5L when blinks > 4 -> [| 2; 0; 4; 8; 2; 8; 8; 0 |] |> Array.sumBy (int64 >> f5)
+                | _, 6L when blinks > 4 -> [| 2; 4; 5; 7; 9; 4; 5; 6 |] |> Array.sumBy (int64 >> f5)
+                | _, 7L when blinks > 4 -> [| 2; 8; 6; 7; 6; 0; 3; 2 |] |> Array.sumBy (int64 >> f5)
+                | _, 8L when blinks > 4 -> [| 3; 2; 7; 7; 2; 6; 16192 |] |> Array.sumBy (int64 >> f5)
+                | _, 9L when blinks > 4 -> [| 3; 6; 8; 6; 9; 1; 8; 4 |] |> Array.sumBy (int64 >> f5)
+                | _, 16192L when blinks > 3 -> [| 3; 2; 7; 7; 2; 6; 16192 |] |> Array.sumBy (int64 >> f4)
+                | _, _ -> startStone |> successors |> Array.sumBy f1
 
-            // TODO: this is still very slow when n is large because result.Head contains a lot of stones; it's growing as roughly 1.5 ^ n.
-            let lists = result.Head |> Array.map (stonesAfterBlinks (n - iterationsCached))
+            cache[(blinks, startStone)] <- result
 
-            let newResult = [
-                // lists have length n - iterationsCached because they're produced by stonesAfterBlinks (n - iterationsCached).
-                for i in 1 .. (n - iterationsCached) do
-                    lists |> Array.map (fun l -> l[i - 1]) |> Array.reduce Array.append
-                yield! result
-            ]
-
-            cache[startStone] <- newResult
-            newResult
-        | _, None ->
-            let lists = startStone |> successors |> Array.map (stonesAfterBlinks (n - 1))
-
-            let result = [
-                for i in 1 .. n - 1 do
-                    lists |> Array.map (fun l -> l[i - 1]) |> Array.reduce Array.append
-                successors startStone
-            ]
-
-            cache[startStone] <- result
-            result
+            result)
 
     let solveN n (lines: string array) =
         lines[0]
         |> parse
-        |> Array.collect (stonesAfterBlinks n >> List.head)
-        |> Array.length
+        |> Array.sumBy (fun stone -> numberOfStonesAfterBlinks n stone)
 
     let solve = solveN 75
 
@@ -78,6 +66,17 @@ module Test =
 
     open Expecto
     open Swensen.Unquote
+    open FsCheck
+
+    // Ensure stones are non-negative.
+    type StoneGen() =
+        static member Stone() : Arbitrary<int64> =
+            Arb.Default.Int64() |> Arb.filter (fun s -> -1L < s)
+
+    // Ensure oracle returns result in a reasonable time.
+    type BlinksGen() =
+        static member Blinks() : Arbitrary<int> =
+            Arb.Default.Int32() |> Arb.filter (fun b -> 0 < b && b < 26)
 
     let all =
         testList "Day11" [
@@ -137,52 +136,24 @@ module Test =
 
             testList "PartTwo" [
 
-                testCase "stoneAfterBlinks works with sample input" (fun _ ->
+                testPropertyWithConfig
+                    {
+                        FsCheckConfig.defaultConfig with
+                            arbitrary = [ typeof<StoneGen>; typeof<BlinksGen> ]
+                    }
+                    "numberOfStonesAfterBlinks matches answer from PartOne"
+                    (fun blinks stone ->
+                        let oracle = Array.singleton >> PartOne.iterateNTimes blinks >> Array.length
+                        test <@ PartTwo.numberOfStonesAfterBlinks blinks stone = oracle stone @>)
 
-                    let after n =
-                        [| 125L; 17L |]
-                        |> Array.map (PartTwo.stonesAfterBlinks 6)
-                        |> Array.collect (List.item (6 - n))
-
-                    let expectedAfter1 = [| 253000L; 1L; 7L |]
-                    let expectedAfter2 = [| 253L; 0L; 2024L; 14168L |]
-                    let expectedAfter3 = [| 512072L; 1L; 20L; 24L; 28676032L |]
-                    let expectedAfter4 = [| 512L; 72L; 2024L; 2L; 0L; 2L; 4L; 2867L; 6032L |]
-                    let expectedAfter5 = [| 1036288L; 7L; 2L; 20L; 24L; 4048L; 1L; 4048L; 8096L; 28L; 67L; 60L; 32L |]
-
-                    let expectedAfter6 = [|
-                        2097446912L
-                        14168L
-                        4048L
-                        2L
-                        0L
-                        2L
-                        4L
-                        40L
-                        48L
-                        2024L
-                        40L
-                        48L
-                        80L
-                        96L
-                        2L
-                        8L
-                        6L
-                        7L
-                        6L
-                        0L
-                        3L
-                        2L
-                    |]
-
-                    test <@ after 1 = expectedAfter1 @>
-                    test <@ after 2 = expectedAfter2 @>
-                    test <@ after 3 = expectedAfter3 @>
-                    test <@ after 4 = expectedAfter4 @>
-                    test <@ after 5 = expectedAfter5 @>
-                    test <@ after 6 = expectedAfter6 @>)
-
-                testCase "solveN works with sample input" (fun _ -> test <@ PartTwo.solveN 25 sampleInput = 55312 @>)
+                testCase "solveN works with sample input" (fun _ ->
+                    test <@ PartTwo.solveN 1 sampleInput = 3 @>
+                    test <@ PartTwo.solveN 2 sampleInput = 4 @>
+                    test <@ PartTwo.solveN 3 sampleInput = 5 @>
+                    test <@ PartTwo.solveN 4 sampleInput = 9 @>
+                    test <@ PartTwo.solveN 5 sampleInput = 13 @>
+                    test <@ PartTwo.solveN 6 sampleInput = 22 @>
+                    test <@ PartTwo.solveN 25 sampleInput = 55312 @>)
             ]
         ]
 
