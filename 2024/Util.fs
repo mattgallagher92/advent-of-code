@@ -19,6 +19,11 @@ module Int32 =
         | true, i -> Some i
         | false, _ -> None
 
+[<RequireQualifiedAccess>]
+module String =
+    let removeAt j (s: string) =
+        s |> Seq.toArray |> Array.removeAt j |> (fun cs -> String cs |> string)
+
 type Collections.Generic.IDictionary<'a, 'b> with
 
     member this.TryGet k =
@@ -30,6 +35,12 @@ type Collections.Generic.IDictionary<'a, 'b> with
 module Pair =
 
     let asArray (x, y) = [| x; y |]
+
+    let mapFst f (x, y) = f x, y
+
+[<RequireQualifiedAccess>]
+module Option =
+    let noneIfFalse predicate x = if predicate x then Some x else None
 
 [<RequireQualifiedAccess>]
 module Array2D =
@@ -61,6 +72,11 @@ module Array2D =
         |> rows
         |> Array.indexed
         |> Array.collect (fun (r, vs) -> vs |> Array.mapi (fun c v -> (r, c), v))
+
+    let tryGet array2D row col =
+        (row, col)
+        |> Option.noneIfFalse (isWithinBounds array2D)
+        |> Option.map (fun coords -> coords ||> Array2D.get array2D)
 
     // TODO: add tests.
     let tryFindIndex predicate array2D =
