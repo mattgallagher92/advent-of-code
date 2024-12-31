@@ -35,6 +35,30 @@ type Region = {
             |]
             |> Array.sum)
 
+    member this.NumberOfSides() =
+        let distinctSides filter sortBy consecutivePairIsPartOfSameSide (filteredPlots: CompletePlotData array) =
+            filteredPlots
+            |> Array.filter filter
+            |> Array.map _.Coordinates
+            |> Array.sortBy sortBy
+            |> Array.pairwise
+            |> fun pairs -> 1, pairs
+            ||> Array.fold (fun sideCount pair ->
+                if consecutivePairIsPartOfSameSide pair then
+                    sideCount
+                else
+                    sideCount + 1)
+
+        [|
+            let sameRowNextCol ((r1, c1), (r2, c2)) = r2 = r1 && c2 = c1 + 1
+            let sameColNextRow ((r1, c1), (r2, c2)) = c2 = c1 && r2 = r1 + 1
+
+            (fun (p: CompletePlotData) -> p.IsTopBoundary), id, sameRowNextCol
+            (fun (p: CompletePlotData) -> p.IsBottomBoundary), id, sameRowNextCol
+            (fun (p: CompletePlotData) -> p.IsLeftBoundary), (fun (r, c) -> c, r), sameColNextRow
+            (fun (p: CompletePlotData) -> p.IsRightBoundary), (fun (r, c) -> c, r), sameColNextRow
+        |]
+        |> Array.sumBy (fun (filter, sortBy, sameSide) -> this.Plots |> distinctSides filter sortBy sameSide)
 
 type private PreviousPlotData = {|
     Coordinates: int * int
@@ -179,7 +203,10 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    let bulkDiscountPrice (region: Region) = region.Area * region.NumberOfSides()
+
+    let solve (lines: string array) =
+        lines |> parse |> calculateRegions |> Array.sumBy bulkDiscountPrice
 
 module Test =
 
@@ -204,10 +231,14 @@ module Test =
                 "MMMISSJEEE"
             |]
 
+            let sample4 = [| "EEEEE"; "EXXXX"; "EEEEE"; "EXXXX"; "EEEEE" |]
+            let sample5 = [| "AAAAAA"; "AAABBA"; "AAABBA"; "ABBAAA"; "ABBAAA"; "AAAAAA" |]
 
             let map1 = parse sample1
             let map2 = parse sample2
             let map3 = parse sample3
+            let map4 = parse sample4
+            let map5 = parse sample5
 
             testList "PartOne" [
                 let testAreasAndPerimeters mapName map expected =
@@ -249,7 +280,48 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sample1 = -1 @>)
+                let testAreasAndNumberOfSides mapName map expected =
+                    testCase $"%s{mapName} regions have correct areas and perimeters" (fun _ ->
+                        let result = map |> calculateRegions
+
+                        test
+                            <@
+                                result
+                                |> Array.map (fun region ->
+                                    region.Plots[0].PlantType, region.Area, region.NumberOfSides())
+                                |> Array.sort = Array.sort expected
+                            @>)
+
+                [| 'A', 4, 4; 'B', 4, 4; 'C', 4, 8; 'D', 1, 4; 'E', 3, 4 |]
+                |> testAreasAndNumberOfSides (nameof map1) map1
+
+                [|
+                    'R', 12, 10
+                    'I', 4, 4
+                    'C', 14, 22
+                    'F', 10, 12
+                    'V', 13, 10
+                    'J', 11, 12
+                    'C', 1, 4
+                    'E', 13, 8
+                    'I', 14, 16
+                    'M', 5, 6
+                    'S', 3, 6
+                |]
+                |> testAreasAndNumberOfSides (nameof map3) map3
+
+                [| 'E', 17, 12; 'X', 4, 4; 'X', 4, 4 |]
+                |> testAreasAndNumberOfSides (nameof map4) map4
+
+                [| 'A', 28, 12; 'B', 4, 4; 'B', 4, 4 |]
+                |> testAreasAndNumberOfSides (nameof map5) map5
+
+                testCase "solve works with samples" (fun _ ->
+                    test <@ PartTwo.solve sample1 = 80 @>
+                    test <@ PartTwo.solve sample2 = 436 @>
+                    test <@ PartTwo.solve sample3 = 1206 @>
+                    test <@ PartTwo.solve sample4 = 236 @>
+                    test <@ PartTwo.solve sample5 = 368 @>)
             ]
         ]
 
