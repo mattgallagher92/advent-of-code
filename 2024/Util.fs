@@ -73,6 +73,13 @@ module Array2D =
         |> Array.indexed
         |> Array.collect (fun (r, vs) -> vs |> Array.mapi (fun c v -> (r, c), v))
 
+    let indexes array2D = [|
+        for r in 0 .. Array2D.length1 array2D - 1 do
+            for c in 0 .. Array2D.length2 array2D - 1 do
+                r, c
+    |]
+
+
     let tryGet array2D row col =
         (row, col)
         |> Option.noneIfFalse (isWithinBounds array2D)
