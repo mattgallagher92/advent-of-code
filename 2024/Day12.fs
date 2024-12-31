@@ -13,6 +13,12 @@ type CompletePlotData = {|
     IsBottomBoundary: bool
 |}
 
+type Direction =
+    | Up
+    | Down
+    | Left
+    | Right
+
 type Region = {
     RegionId: int * int
     Plots: CompletePlotData array
@@ -31,6 +37,81 @@ type Region = {
                 if p.IsLeftBoundary then
                     1
                 if p.IsRightBoundary then
+                    1
+            |]
+            |> Array.sum)
+
+    member this.NumberOfCorners1() =
+        let coordinateSet =
+            this.Plots |> Array.map _.Coordinates |> System.Collections.Generic.HashSet
+
+        this.Plots
+        |> Array.sumBy (fun p ->
+            [|
+                // Inner corners.
+                if p.IsTopBoundary && p.IsLeftBoundary then
+                    1
+                if p.IsTopBoundary && p.IsRightBoundary then
+                    1
+                if p.IsBottomBoundary && p.IsLeftBoundary then
+                    1
+                if p.IsBottomBoundary && p.IsRightBoundary then
+                    1
+
+                // Outer corners.
+                let r, c = p.Coordinates
+
+                if p.IsTopBoundary && not p.IsLeftBoundary && coordinateSet.Contains(r - 1, c - 1) then
+                    1
+
+                if p.IsTopBoundary && not p.IsRightBoundary && coordinateSet.Contains(r - 1, c + 1) then
+                    1
+
+                if
+                    p.IsBottomBoundary
+                    && not p.IsLeftBoundary
+                    && coordinateSet.Contains(r + 1, c - 1)
+                then
+                    1
+
+                if
+                    p.IsBottomBoundary
+                    && not p.IsRightBoundary
+                    && coordinateSet.Contains(r + 1, c + 1)
+                then
+                    1
+            |]
+            |> Array.sum)
+
+    member this.NumberOfCorners2() =
+        let coordinateSet =
+            this.Plots |> Array.map _.Coordinates |> System.Collections.Generic.HashSet
+
+        let isIn coords = coordinateSet.Contains coords
+        let isNotIn = not << isIn
+
+        coordinateSet
+        |> Seq.sumBy (fun (r, c) ->
+            let u, d, l, ri = (r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)
+            let ul, ur, dl, dr = (r - 1, c - 1), (r - 1, c + 1), (r + 1, c - 1), (r + 1, c + 1)
+
+            [|
+                if u |> isNotIn && l |> isNotIn then
+                    1
+                if u |> isNotIn && ri |> isNotIn then
+                    1
+                if d |> isNotIn && l |> isNotIn then
+                    1
+                if d |> isNotIn && ri |> isNotIn then
+                    1
+
+                if u |> isIn && l |> isIn && ul |> isNotIn then
+                    1
+                if u |> isIn && ri |> isIn && ur |> isNotIn then
+                    1
+                if d |> isIn && l |> isIn && dl |> isNotIn then
+                    1
+                if d |> isIn && ri |> isIn && dr |> isNotIn then
                     1
             |]
             |> Array.sum)
@@ -59,6 +140,58 @@ type Region = {
             (fun (p: CompletePlotData) -> p.IsRightBoundary), (fun (r, c) -> c, r), sameColNextRow
         |]
         |> Array.sumBy (fun (filter, sortBy, sameSide) -> this.Plots |> distinctSides filter sortBy sameSide)
+
+    member this.NumberOfSides2() =
+        let perimeterObjects =
+            this.Plots
+            |> Array.collect (fun p ->
+                [|
+                    if p.IsTopBoundary then
+                        Up
+                    if p.IsBottomBoundary then
+                        Down
+                    if p.IsLeftBoundary then
+                        Left
+                    if p.IsRightBoundary then
+                        Right
+                |]
+                |> Array.map (fun d -> p.Coordinates, d))
+            |> System.Collections.Generic.HashSet
+
+        let mutable sides = 0
+
+        while perimeterObjects.Count > 0 do
+            let pos, d = perimeterObjects |> Seq.head
+            perimeterObjects.Remove(pos, d) |> ignore
+            sides <- sides + 1
+
+            let perp1 (r, c) =
+                match d with
+                | Right -> r - 1, c
+                | Down -> r, c + 1
+                | Left -> r + 1, c
+                | Up -> r, c - 1
+
+            let mutable next = perp1 pos
+
+            while perimeterObjects.Contains(next, d) do
+                perimeterObjects.Remove(next, d) |> ignore
+                next <- perp1 next
+
+            let perp2 (r, c) =
+                match d with
+                | Left -> r - 1, c
+                | Up -> r, c + 1
+                | Right -> r + 1, c
+                | Down -> r, c - 1
+
+            let mutable next = perp2 pos
+
+            while perimeterObjects.Contains(next, d) do
+                perimeterObjects.Remove(next, d) |> ignore
+                next <- perp2 next
+
+        sides
 
 type private PreviousPlotData = {|
     Coordinates: int * int
@@ -280,41 +413,38 @@ module Test =
             ]
 
             testList "PartTwo" [
-                let testAreasAndNumberOfSides mapName map expected =
+                let testNumberOfSides mapName map expected =
                     testCase $"%s{mapName} regions have correct areas and perimeters" (fun _ ->
                         let result = map |> calculateRegions
 
                         test
                             <@
                                 result
-                                |> Array.map (fun region ->
-                                    region.Plots[0].PlantType, region.Area, region.NumberOfSides())
+                                |> Array.map (fun region -> region.Plots[0].PlantType, region.NumberOfSides2())
                                 |> Array.sort = Array.sort expected
                             @>)
 
-                [| 'A', 4, 4; 'B', 4, 4; 'C', 4, 8; 'D', 1, 4; 'E', 3, 4 |]
-                |> testAreasAndNumberOfSides (nameof map1) map1
+                [| 'A', 4; 'B', 4; 'C', 8; 'D', 4; 'E', 4 |]
+                |> testNumberOfSides (nameof map1) map1
 
                 [|
-                    'R', 12, 10
-                    'I', 4, 4
-                    'C', 14, 22
-                    'F', 10, 12
-                    'V', 13, 10
-                    'J', 11, 12
-                    'C', 1, 4
-                    'E', 13, 8
-                    'I', 14, 16
-                    'M', 5, 6
-                    'S', 3, 6
+                    'R', 10
+                    'I', 4
+                    'C', 22
+                    'F', 12
+                    'V', 10
+                    'J', 12
+                    'C', 4
+                    'E', 8
+                    'I', 16
+                    'M', 6
+                    'S', 6
                 |]
-                |> testAreasAndNumberOfSides (nameof map3) map3
+                |> testNumberOfSides (nameof map3) map3
 
-                [| 'E', 17, 12; 'X', 4, 4; 'X', 4, 4 |]
-                |> testAreasAndNumberOfSides (nameof map4) map4
+                [| 'E', 12; 'X', 4; 'X', 4 |] |> testNumberOfSides (nameof map4) map4
+                [| 'A', 12; 'B', 4; 'B', 4 |] |> testNumberOfSides (nameof map5) map5
 
-                [| 'A', 28, 12; 'B', 4, 4; 'B', 4, 4 |]
-                |> testAreasAndNumberOfSides (nameof map5) map5
 
                 testCase "solve works with samples" (fun _ ->
                     test <@ PartTwo.solve sample1 = 80 @>
