@@ -58,6 +58,7 @@ module PartOne =
         Previous: PreviousPlotData
         Earlier: EarlierPlotData array
         Complete: CompletePlotData array
+        RegionIdUpdates: ((int * int) * (int * int)) list
     }
 
     let calculateRegions map =
@@ -77,6 +78,7 @@ module PartOne =
                 |}
                 Earlier = [||]
                 Complete = [||]
+                RegionIdUpdates = []
             }
 
         // Scan through all plots, row-by-row, building up the following data for each plot:
@@ -106,20 +108,10 @@ module PartOne =
                 // Since width is at least 2, earlierAbove is guaranteed to be Some if isTopBoundary is false.
                 | false, true -> earlierAbove.Value.RegionId, None
                 | false, false ->
-                    min earlierAbove.Value.RegionId state.Previous.RegionId,
-                    Some(max earlierAbove.Value.RegionId state.Previous.RegionId)
-
-            let updateEarlierRegionId (e: EarlierPlotData) =
-                if regionIdToUpdate = Some e.RegionId then
-                    {| e with RegionId = newRegionId |}
-                else
-                    e
-
-            let updateCompleteRegionId (c: CompletePlotData) =
-                if regionIdToUpdate = Some c.RegionId then
-                    {| c with RegionId = newRegionId |}
-                else
-                    c
+                    let above, left = earlierAbove.Value.RegionId, state.Previous.RegionId
+                    let new' = min above left
+                    let toUpdate = if above <> left then Some(max above left) else None
+                    new', toUpdate
 
             {
                 Previous = {|
@@ -129,35 +121,53 @@ module PartOne =
                     IsTopBoundary = isTopBoundary
                     IsLeftBoundary = isLeftBoundary
                 |}
-                Earlier =
-                    [|
-                        {| state.Previous with IsRightBoundary = isLeftBoundary |}
-                        yield! otherEarlier
-                    |]
-                    |> Array.map updateEarlierRegionId
+                Earlier = [|
+                    {| state.Previous with IsRightBoundary = isLeftBoundary |}
+                    yield! otherEarlier
+                |]
                 Complete =
                     earlierAbove
-                    |> Option.map (fun earlierAbove ->
-                        [|
-                            {| earlierAbove with IsBottomBoundary = isTopBoundary |}
-                            yield! state.Complete
-                        |]
-                        |> Array.map updateCompleteRegionId)
+                    |> Option.map (fun earlierAbove -> [|
+                        {| earlierAbove with IsBottomBoundary = isTopBoundary |}
+                        yield! state.Complete
+                    |])
                     |> Option.defaultValue state.Complete
+                RegionIdUpdates =
+                    match regionIdToUpdate with
+                    | Some rId -> (rId, newRegionId) :: state.RegionIdUpdates
+                    | None -> state.RegionIdUpdates
             })
-        // Previous is bottom-right plot; earlier is other plots on bottom row.
         |> fun state ->
+            let distinctUpdates =
+                state.RegionIdUpdates
+                |> List.toArray
+                // Reverse before and after distinct to keep later elements if there are duplicates.
+                |> Array.rev
+                |> Array.distinct
+                |> Array.rev
+
+            let updateRegionId (data: CompletePlotData) =
+                (data, distinctUpdates)
+                ||> Array.fold (fun c (regionIdToUpdate, newRegionId) ->
+                    if c.RegionId = regionIdToUpdate then
+                        {| c with RegionId = newRegionId |}
+                    else
+                        c)
+
             (state.Complete, state.Earlier)
+            // Earlier is plots on bottom row except bottom-right.
             ||> Array.fold (fun complete earlier -> [| {| earlier with IsBottomBoundary = true |}; yield! complete |])
             |> fun rest -> [|
                 {|
+                    // Previous is bottom-right plot
                     state.Previous with
                         IsRightBoundary = true
                         IsBottomBoundary = true
                 |}
                 yield! rest
             |]
-        // - Group by region ID to get regions. Area is number of plots; perimeter is sum of Is*Boundary counts.
+            |> Array.map updateRegionId
+        // - Group by region ID to get regions.
         |> Array.groupBy _.RegionId
         |> Array.map (fun (regionId, plots) -> { RegionId = regionId; Plots = plots })
 
