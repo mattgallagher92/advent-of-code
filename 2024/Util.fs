@@ -12,6 +12,9 @@ module Array =
     let mapSnd f pairs =
         pairs |> Array.map (fun (x, y) -> x, f y)
 
+    let withIndexMatching predicate xs =
+        xs |> Array.indexed |> Array.filter (fst >> predicate) |> Array.map snd
+
 [<RequireQualifiedAccess>]
 module Int32 =
     let tryParse (s: string) =
