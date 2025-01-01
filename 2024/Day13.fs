@@ -4,36 +4,36 @@ let regexMatch pattern input =
     System.Text.RegularExpressions.Regex.Match(input, pattern)
 
 type Machine = {
-    AMove: int * int
-    BMove: int * int
-    PrizeLocation: int * int
+    AMove: int64 * int64
+    BMove: int64 * int64
+    PrizeLocation: int64 * int64
 }
 
-let parse (lines: string array) =
-    let behaviourDescriptions =
-        lines |> Array.windowed 3 |> Array.withIndexMatching (fun i -> i % 4 = 0)
+type Play = { APresses: int64; BPresses: int64 }
 
-    behaviourDescriptions
-    |> Array.map (function
-        | [| a; b; p |] as desc ->
-            let aMatch = a |> regexMatch "Button A: X\+(\d+), Y\+(\d+)"
-            let bMatch = b |> regexMatch "Button B: X\+(\d+), Y\+(\d+)"
-            let pMatch = p |> regexMatch "Prize: X=(\d+), Y=(\d+)"
-
-            match aMatch.Success, bMatch.Success, pMatch.Success with
-            | true, true, true -> {
-                AMove = int aMatch.Groups[1].Value, int aMatch.Groups[2].Value
-                BMove = int bMatch.Groups[1].Value, int bMatch.Groups[2].Value
-                PrizeLocation = int pMatch.Groups[1].Value, int pMatch.Groups[2].Value
-              }
-            | x -> failwith $"Invalid input behaviour description: %A{desc}, {x}"
-        | desc -> failwith $"Invalid input behaviour description: %A{desc}")
+let cost { APresses = a; BPresses = b } = 3L * a + b
 
 module PartOne =
 
-    type Play = { APresses: int; BPresses: int }
+    let parse (lines: string array) =
+        let behaviourDescriptions =
+            lines |> Array.windowed 3 |> Array.withIndexMatching (fun i -> i % 4 = 0)
 
-    let cost { APresses = a; BPresses = b } = 3 * a + b
+        behaviourDescriptions
+        |> Array.map (function
+            | [| a; b; p |] as desc ->
+                let aMatch = a |> regexMatch "Button A: X\+(\d+), Y\+(\d+)"
+                let bMatch = b |> regexMatch "Button B: X\+(\d+), Y\+(\d+)"
+                let pMatch = p |> regexMatch "Prize: X=(\d+), Y=(\d+)"
+
+                match aMatch.Success, bMatch.Success, pMatch.Success with
+                | true, true, true -> {
+                    AMove = int aMatch.Groups[1].Value, int aMatch.Groups[2].Value
+                    BMove = int bMatch.Groups[1].Value, int bMatch.Groups[2].Value
+                    PrizeLocation = int pMatch.Groups[1].Value, int pMatch.Groups[2].Value
+                  }
+                | x -> failwith $"Invalid input behaviour description: %A{desc}, {x}"
+            | desc -> failwith $"Invalid input behaviour description: %A{desc}")
 
     let buttonPressPossibilities =
         Array.allPairs [| 0..100 |] [| 0..100 |]
@@ -49,7 +49,38 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    let parse lines =
+        PartOne.parse lines
+        |> Array.map (fun m -> {
+            m with
+                PrizeLocation = let px, py = m.PrizeLocation in px + 10000000000000L, py + 10000000000000L
+        })
+
+    let quotientIfNoRemainder (divisor: int64) dividend =
+        match System.Math.DivRem(dividend, divisor) with
+        | q, 0L -> Some q
+        | _ -> None
+
+    let cheapestWin ({ AMove = ax, ay; BMove = bx, by; PrizeLocation = px, py } as machine) =
+        let a, b, c, d = ax, bx, ay, by
+
+        let determinant =
+            a * d - b * c
+            |> fun d ->
+                if d = 0L then
+                    failwith $"%A{machine} has non-invertible matrix"
+                else
+                    d
+
+        let winA = d * px - b * py |> quotientIfNoRemainder determinant
+        let winB = -c * px + a * py |> quotientIfNoRemainder determinant
+
+        match winA, winB with
+        | Some winA, Some winB when winA >= 0L && winB >= 0L -> Some { APresses = winA; BPresses = winB }
+        | _ -> None
+
+    let solve (lines: string array) =
+        lines |> parse |> Array.choose cheapestWin |> Array.sumBy cost
 
 module Test =
 
@@ -81,7 +112,22 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "cheapestWin returns None, Some _, None, Some _ for sample input" (fun _ ->
+                    let result = sampleInput |> PartTwo.parse |> Array.map PartTwo.cheapestWin
+                    test <@ result[0].IsNone && result[1].IsSome && result[2].IsNone && result[3].IsSome @>)
+
+                testCase "cheapestWin works with data for part one" (fun _ ->
+                    let result = sampleInput |> PartOne.parse |> Array.map PartTwo.cheapestWin
+
+                    test
+                        <@
+                            result = [|
+                                Some { APresses = 80L; BPresses = 40L }
+                                None
+                                Some { APresses = 38L; BPresses = 86L }
+                                None
+                            |]
+                        @>)
             ]
         ]
 
