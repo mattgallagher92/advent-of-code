@@ -124,7 +124,12 @@ module PartTwo =
 
     let solveDim width height (lines: string array) =
         let couldBeEasterEgg robots =
-            robots |> gridIsSplitByRobots width height
+            robots
+            |> Array.map _.Pos
+            |> Array.filter (fst >> (=) (width / 2))
+            |> Array.map snd
+            |> Array.length
+            |> fun count -> count > 10
 
         let next = Array.map (fun r -> { r with Pos = nextPosition width height r })
 
@@ -147,11 +152,12 @@ module PartTwo =
         while not isEasterEgg do
 
             while not (couldBeEasterEgg robots) do
+                printfn $"elapsedSeconds %i{elapsedSeconds}"
                 robots <- robots |> next
                 elapsedSeconds <- elapsedSeconds + 1
 
-            printfn $"Are the robots arranged in a Christmas tree after %i{elapsedSeconds} seconds?"
             printRobots ()
+            printfn $"Are the robots arranged in a Christmas tree after %i{elapsedSeconds} seconds?"
             printfn "Y/N"
 
             isEasterEgg <- System.Console.ReadLine() = "Y"
