@@ -6,44 +6,120 @@ let regexMatch pattern input =
 let modulo n a =
     a % n |> fun m -> if m < 0 then m + n else m
 
-type Robot = { Pos0: int * int; Velocity: int * int }
+type Robot = { Pos: int * int; Velocity: int * int }
 
 let parseLine (line: string) =
     line
     |> regexMatch "p=(\d+),(\d+) v=([-\d]+),([-\d]+)"
     |> _.Groups
     |> fun gs -> {
-        Pos0 = int gs[1].Value, int gs[2].Value
+        Pos = int gs[1].Value, int gs[2].Value
         Velocity = int gs[3].Value, int gs[4].Value
+    }
+
+type PerQuadrantCount = { TL: int; TR: int; BL: int; BR: int }
+
+let robotsPerQuadrant midX midY positions =
+    let grouped =
+        positions
+        |> Array.filter (fun (x, y) -> x <> midX && y <> midY)
+        |> Array.groupBy (fun (x, y) -> x < midX, y < midY)
+
+    {
+        TL =
+            grouped
+            |> Array.tryFind (fst >> (=) (true, true))
+            |> Option.map (snd >> Array.length)
+            |> Option.defaultValue 0
+        TR =
+            grouped
+            |> Array.tryFind (fst >> (=) (false, true))
+            |> Option.map (snd >> Array.length)
+            |> Option.defaultValue 0
+        BL =
+            grouped
+            |> Array.tryFind (fst >> (=) (true, false))
+            |> Option.map (snd >> Array.length)
+            |> Option.defaultValue 0
+        BR =
+            grouped
+            |> Array.tryFind (fst >> (=) (false, false))
+            |> Option.map (snd >> Array.length)
+            |> Option.defaultValue 0
     }
 
 module PartOne =
 
-    let positionAfterNSteps width height n { Pos0 = x0, y0; Velocity = vx, vy } =
+    let positionAfterNSteps width height n { Pos = x0, y0; Velocity = vx, vy } =
         let xN = x0 + vx * n |> modulo width
         let yN = y0 + vy * n |> modulo height
         xN, yN
 
-    let safetyFactor width height positions =
-        let w = width / 2
-        let h = height / 2
-
-        positions
-        |> Array.filter (fun (x, y) -> x <> w && y <> h)
-        |> Array.groupBy (fun (x, y) -> x < w, y < h)
-        |> Array.map (snd >> Array.length)
-        |> Array.reduce (*)
+    let safetyFactor pqc = pqc.TL * pqc.TR * pqc.BL * pqc.BR
 
     let solveDim width height lines =
         lines
         |> Array.map (parseLine >> positionAfterNSteps width height 100)
-        |> safetyFactor width height
+        |> robotsPerQuadrant (width / 2) (height / 2)
+        |> safetyFactor
 
     let solve = solveDim 101 103
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    let nextPosition width height { Pos = x, y; Velocity = vx, vy } =
+        let x' = x + vx |> modulo width
+        let y' = y + vy |> modulo height
+        x', y'
+
+    let areBalanced midX midY robots =
+        robots
+        |> Array.map _.Pos
+        |> robotsPerQuadrant midX midY
+        |> fun c -> c.TL = c.TR && c.BL = c.BR
+
+    let solveDim width height (lines: string array) =
+        let midX, midY = width / 2, height / 2
+
+        let areBalanced = areBalanced midX midY
+        let next = Array.map (fun r -> { r with Pos = nextPosition width height r })
+
+        let mutable robots = lines |> Array.map parseLine
+
+        let printRobots () =
+            for y in 0..height do
+                for x in 0..width do
+                    if robots |> Array.exists (fun r -> r.Pos = (x, y)) then
+                        printf "x"
+                    else
+                        printf " "
+
+                printfn ""
+
+            printfn ""
+
+        let mutable elapsedSeconds = 0
+        let mutable isEasterEgg = false
+
+        while not isEasterEgg do
+
+            while not (areBalanced robots) do
+                robots <- robots |> next
+                elapsedSeconds <- elapsedSeconds + 1
+
+            printfn $"Are the robots arranged in a Christmas tree after %i{elapsedSeconds} seconds?"
+            printRobots ()
+            printfn "Y/N"
+
+            isEasterEgg <- System.Console.ReadLine() = "Y"
+
+            robots <- robots |> next
+            elapsedSeconds <- elapsedSeconds + 1
+
+        printfn $"First in a Christmas tree formation after %i{elapsedSeconds} seconds."
+        elapsedSeconds
+
+    let solve lines = solveDim 101 103 lines
 
 module Test =
 
@@ -79,9 +155,7 @@ module Test =
                 testCase "solveDim works with sample input" (fun _ -> test <@ PartOne.solveDim 11 7 sampleInput = 12 @>)
             ]
 
-            testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
-            ]
+            testList "PartTwo" []
         ]
 
 let dayFns = {
