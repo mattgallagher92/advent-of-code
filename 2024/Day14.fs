@@ -131,9 +131,21 @@ module PartTwo =
             |> Array.length
             |> fun count -> count > 10
 
-        let next = Array.map (fun r -> { r with Pos = nextPosition width height r })
+        let next =
+            Array.map (fun r -> {
+                r with
+                    Pos = PartOne.positionAfterNSteps width height 101 r
+            })
 
-        let mutable robots = lines |> Array.map parseLine
+        let mutable robots =
+            lines
+            |> Array.map (
+                parseLine
+                >> fun r -> {
+                    r with
+                        Pos = PartOne.positionAfterNSteps width height 98 r
+                }
+            )
 
         let printRobots () =
             let map = map width height robots
@@ -146,7 +158,7 @@ module PartTwo =
 
             printfn ""
 
-        let mutable elapsedSeconds = 0
+        let mutable elapsedSeconds = 98
         let mutable isEasterEgg = false
 
         while not isEasterEgg do
@@ -163,7 +175,7 @@ module PartTwo =
             isEasterEgg <- System.Console.ReadLine() = "Y"
 
             robots <- robots |> next
-            elapsedSeconds <- elapsedSeconds + 1
+            elapsedSeconds <- elapsedSeconds + 101
 
         printfn $"First in a Christmas tree formation after %i{elapsedSeconds} seconds."
         elapsedSeconds
