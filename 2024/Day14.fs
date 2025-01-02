@@ -65,34 +65,77 @@ module PartOne =
 
     let solve = solveDim 101 103
 
+[<AutoOpen>]
+module Util =
+    let findRegionFor map startCoords =
+        let get pos = pos ||> Array2D.get map
+        let adjacents pos = pos |> Array2D.adjacentIndexes map
+        let value = get startCoords
+
+        (set [| startCoords |], set [| startCoords |])
+        |> Array.unfold (fun (coordinatesSoFar, lastCoordinatesAdded) ->
+            match
+                lastCoordinatesAdded
+                |> Set.map (fun cs -> cs |> adjacents |> Array.filter (get >> (=) value) |> set)
+                |> Set.unionMany
+                |> fun new' -> Set.difference new' coordinatesSoFar
+            with
+            | s when Set.isEmpty s -> None
+            | newCoords ->
+                let newCoordinatesSoFar = Set.union coordinatesSoFar newCoords
+                Some(newCoordinatesSoFar, (newCoordinatesSoFar, newCoords)))
+        |> function
+            | [||] -> set [| startCoords |]
+            | coordsArray -> Array.last coordsArray
+
 module PartTwo =
+
+    let map width height robots =
+        let positions = robots |> Array.map _.Pos |> set
+
+        [|
+            for y in 0..height do
+                [|
+                    for x in 0..width do
+                        // Unusual order because I usually index by row then column.
+                        positions.Contains(y, x)
+                |]
+        |]
+        |> array2D
+
+    let gridIsSplitByRobots width height robots =
+        let positions = robots |> Array.map _.Pos |> set
+
+        let map = map width height robots
+
+        let uncoveredPositions = map |> Array2D.indexes |> Array.except positions
+
+        uncoveredPositions
+        |> Array.tryHead
+        |> Option.map (fun p ->
+            let r = findRegionFor map p
+            r.Count < uncoveredPositions.Length)
+        |> Option.defaultValue false
 
     let nextPosition width height { Pos = x, y; Velocity = vx, vy } =
         let x' = x + vx |> modulo width
         let y' = y + vy |> modulo height
         x', y'
 
-    let areBalanced midX midY robots =
-        robots
-        |> Array.map _.Pos
-        |> robotsPerQuadrant midX midY
-        |> fun c -> c.TL = c.TR && c.BL = c.BR
-
     let solveDim width height (lines: string array) =
-        let midX, midY = width / 2, height / 2
+        let couldBeEasterEgg robots =
+            robots |> gridIsSplitByRobots width height
 
-        let areBalanced = areBalanced midX midY
         let next = Array.map (fun r -> { r with Pos = nextPosition width height r })
 
         let mutable robots = lines |> Array.map parseLine
 
         let printRobots () =
+            let map = map width height robots
+
             for y in 0..height do
                 for x in 0..width do
-                    if robots |> Array.exists (fun r -> r.Pos = (x, y)) then
-                        printf "x"
-                    else
-                        printf " "
+                    if map[y, x] then printf "x" else printf " "
 
                 printfn ""
 
@@ -103,7 +146,7 @@ module PartTwo =
 
         while not isEasterEgg do
 
-            while not (areBalanced robots) do
+            while not (couldBeEasterEgg robots) do
                 robots <- robots |> next
                 elapsedSeconds <- elapsedSeconds + 1
 
