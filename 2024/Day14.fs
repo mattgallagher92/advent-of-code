@@ -65,29 +65,6 @@ module PartOne =
 
     let solve = solveDim 101 103
 
-[<AutoOpen>]
-module Util =
-    let findRegionFor map startCoords =
-        let get pos = pos ||> Array2D.get map
-        let adjacents pos = pos |> Array2D.adjacentIndexes map
-        let value = get startCoords
-
-        (set [| startCoords |], set [| startCoords |])
-        |> Array.unfold (fun (coordinatesSoFar, lastCoordinatesAdded) ->
-            match
-                lastCoordinatesAdded
-                |> Set.map (fun cs -> cs |> adjacents |> Array.filter (get >> (=) value) |> set)
-                |> Set.unionMany
-                |> fun new' -> Set.difference new' coordinatesSoFar
-            with
-            | s when Set.isEmpty s -> None
-            | newCoords ->
-                let newCoordinatesSoFar = Set.union coordinatesSoFar newCoords
-                Some(newCoordinatesSoFar, (newCoordinatesSoFar, newCoords)))
-        |> function
-            | [||] -> set [| startCoords |]
-            | coordsArray -> Array.last coordsArray
-
 module PartTwo =
 
     let map width height robots =
@@ -103,49 +80,15 @@ module PartTwo =
         |]
         |> array2D
 
-    let gridIsSplitByRobots width height robots =
-        let positions = robots |> Array.map _.Pos |> set
-
-        let map = map width height robots
-
-        let uncoveredPositions = map |> Array2D.indexes |> Array.except positions
-
-        uncoveredPositions
-        |> Array.tryHead
-        |> Option.map (fun p ->
-            let r = findRegionFor map p
-            r.Count < uncoveredPositions.Length)
-        |> Option.defaultValue false
-
     let nextPosition width height { Pos = x, y; Velocity = vx, vy } =
         let x' = x + vx |> modulo width
         let y' = y + vy |> modulo height
         x', y'
 
     let solveDim width height (lines: string array) =
-        let couldBeEasterEgg robots =
-            robots
-            |> Array.map _.Pos
-            |> Array.filter (fst >> (=) (width / 2))
-            |> Array.map snd
-            |> Array.length
-            |> fun count -> count > 10
+        let next = Array.map (fun r -> { r with Pos = nextPosition width height r })
 
-        let next =
-            Array.map (fun r -> {
-                r with
-                    Pos = PartOne.positionAfterNSteps width height 101 r
-            })
-
-        let mutable robots =
-            lines
-            |> Array.map (
-                parseLine
-                >> fun r -> {
-                    r with
-                        Pos = PartOne.positionAfterNSteps width height 98 r
-                }
-            )
+        let mutable robots = lines |> Array.map parseLine
 
         let printRobots () =
             let map = map width height robots
@@ -158,27 +101,40 @@ module PartTwo =
 
             printfn ""
 
-        let mutable elapsedSeconds = 98
-        let mutable isEasterEgg = false
+        let mutable elapsedSeconds = 0
+        let mutable horizontalBandAfter = -1
+        let mutable verticalBandAfter = -1
 
-        while not isEasterEgg do
-
-            while not (couldBeEasterEgg robots) do
-                printfn $"elapsedSeconds %i{elapsedSeconds}"
-                robots <- robots |> next
-                elapsedSeconds <- elapsedSeconds + 1
-
+        while horizontalBandAfter < 0 || verticalBandAfter < 0 do
+            printfn $"elapsedSeconds: %i{elapsedSeconds}"
             printRobots ()
-            printfn $"Are the robots arranged in a Christmas tree after %i{elapsedSeconds} seconds?"
-            printfn "Y/N"
 
-            isEasterEgg <- System.Console.ReadLine() = "Y"
+            printfn
+                "Are most of the robots arranged in a band? 'h' for horizontal band, 'v' for vertical band, anything else for neither."
+
+            match System.Console.ReadLine() with
+            | "h" -> horizontalBandAfter <- elapsedSeconds
+            | "v" -> verticalBandAfter <- elapsedSeconds
+            | _ -> ()
 
             robots <- robots |> next
-            elapsedSeconds <- elapsedSeconds + 101
+            elapsedSeconds <- elapsedSeconds + 1
 
-        printfn $"First in a Christmas tree formation after %i{elapsedSeconds} seconds."
-        elapsedSeconds
+        printfn $"h: %i{horizontalBandAfter}, v: %i{verticalBandAfter}"
+
+        // The bands reappear periodically.
+        while elapsedSeconds % height <> verticalBandAfter
+              || elapsedSeconds % width <> horizontalBandAfter do
+            robots <- robots |> next
+            elapsedSeconds <- elapsedSeconds + 1
+
+        printRobots ()
+
+        printfn "Are most of the robots arranged in a Christmas tree formation? 'y' for yes, anything else for no."
+
+        match System.Console.ReadLine() with
+        | "y" -> elapsedSeconds
+        | _ -> failwith "Program doesn't work!"
 
     let solve lines = solveDim 101 103 lines
 
