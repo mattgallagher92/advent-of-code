@@ -48,6 +48,9 @@ module Option =
 [<RequireQualifiedAccess>]
 module Array2D =
 
+    let heightAndWidth array2D =
+        Array2D.length1 array2D, Array2D.length2 array2D
+
     let isWithinBounds array2D (row, col) =
         row > -1
         && row < Array2D.length1 array2D
@@ -116,3 +119,14 @@ module Array2D =
     let updateAt r c newVal source =
         let newRow = row r source |> Array.updateAt c newVal
         source |> rows |> Array.updateAt r newRow |> array2D
+
+    let print map =
+        let height, width = heightAndWidth map
+
+        for r in 0 .. height - 1 do
+            for c in 0 .. width - 1 do
+                printf $"%c{map[r, c]}"
+
+            printfn ""
+
+        printfn ""
