@@ -83,12 +83,62 @@ module PartOne =
             { Pos = pos; Facing = West }
             { Pos = pos; Facing = South }
         |]
-        |> Array.choose (fun s -> nodeToLowScore |> Map.tryFind s)
+        |> Array.map (fun n -> nodeToLowScore |> Map.find n)
         |> Array.min
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    let solve (lines: string array) =
+        let maze = lines |> parse
+        let indexed = maze |> Array2D.indexed
+
+        let startNode =
+            indexed
+            |> Array.find (snd >> (=) 'S')
+            |> fst
+            |> fun pos -> { Pos = pos; Facing = East }
+
+        let allPositions = indexed |> Array.filter (snd >> (<>) '#') |> Array.map fst |> set
+
+        let nodeToLowestScoringPaths =
+            (Map [ startNode, ([ [ startNode ] ], 0) ], [ [ startNode ], 0 ])
+            |> Array.unfold (fun (map, scoredPaths) ->
+                match scoredPaths with
+                | [] -> None
+                | _ ->
+                    let possible =
+                        scoredPaths
+                        |> List.collect (fun (path, score) ->
+                            (path.Head, score)
+                            |> possibleNextStates allPositions
+                            |> List.map (fun (newHead, newScore) -> newHead :: path, newScore))
+
+                    ((map, []), possible)
+                    ||> List.fold (fun (m, added) (p, s) ->
+                        match m |> Map.tryFind p.Head with
+                        | Some(_, low) when low < s -> m, added
+                        | Some(paths, low) when low = s -> m |> Map.add p.Head (p :: paths, s), (p, s) :: added
+                        | Some _
+                        | None -> m |> Map.add p.Head ([ p ], s), (p, s) :: added)
+                    |> fun (newMap, added) -> Some(newMap, (newMap, added)))
+            |> Array.last
+
+        indexed
+        |> Array.find (snd >> (=) 'E')
+        |> fst
+        |> fun pos -> [|
+            { Pos = pos; Facing = East }
+            { Pos = pos; Facing = North }
+            { Pos = pos; Facing = West }
+            { Pos = pos; Facing = South }
+        |]
+        |> Array.map (fun n -> nodeToLowestScoringPaths |> Map.find n)
+        // TODO: what if there are multiple end states with the same score?
+        |> Array.minBy snd
+        |> fst
+        |> List.collect (List.map _.Pos)
+        |> List.distinct
+        |> List.length
 
 module Test =
 
@@ -142,7 +192,9 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 45 @>)
+                testCase "solve works with second sample input" (fun _ ->
+                    test <@ PartTwo.solve secondSampleInput = 64 @>)
             ]
         ]
 
