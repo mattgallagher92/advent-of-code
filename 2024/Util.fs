@@ -3,6 +3,11 @@ module Util
 
 open System
 
+module Regex =
+    open System.Text.RegularExpressions
+
+    let regexMatch pattern input = Regex.Match(input, pattern)
+
 [<RequireQualifiedAccess>]
 module Array =
     /// Finds the indexes of all elements that match the given predicate.
