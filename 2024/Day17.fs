@@ -98,7 +98,77 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    // This is my puzzle input converted into F# code.
+    // Register A: 41644071
+    // Register B: 0
+    // Register C: 0
+    //
+    // Program: 2,4,1,2,7,5,1,7,4,4,0,3,5,5,3,0
+    let program () =
+        let mutable a = 41644071
+        let mutable b = 0
+        let mutable c = 0
+        let output = ResizeArray()
+
+        let loop () =
+            // 2, 4
+            b <- a % 0b1000
+            // 1, 2
+            b <- b ^^^ 0b010
+            // 7, 5
+            c <- a >>> b
+            // 1, 7
+            b <- b ^^^ 0b111
+            // 4, 4
+            b <- b ^^^ c
+            // 0, 3
+            a <- a >>> 3
+            // 5, 5
+            output.Add(b % 0b1000)
+
+        // 3, 0
+        while a > 0 do
+            loop ()
+
+        printfn $"%s{System.String.Join(',', output)}"
+
+    let refactoredProgram () =
+        let mutable a = 0b10011110110111000000100111
+        let output = ResizeArray()
+
+        let loop () =
+            // Last three bits of a, with bit 1 flipped (indexing from 0 from right).
+            let b = a % 0b1000 ^^^ 0b010
+            // Output bits b + 2 to b of a (indexing from 0 from right), with bit flipped if corresponding bit in b is 0.
+            output.Add((a >>> b) % 0b1000 ^^^ b ^^^ 0b111)
+            // Right shift a by 3.
+            a <- a >>> 3
+
+        while a > 0 do
+            loop ()
+
+        printfn $"%s{System.String.Join(',', output)}"
+
+    let outputFor (a: int64) =
+        let b = a % 0b1000L ^^^ 0b010 |> int
+        (a >>> b) % 0b1000L ^^^ b ^^^ 0b111
+
+    let threeBitsThatCanProduce output =
+        [| 0b000..0b111 |]
+        |> Array.filter (fun bits -> outputFor bits = output)
+        |> Array.map int64
+
+    let solve (lines: string array) =
+        let program = lines |> parse |> _.Program |> Array.map int64
+
+        (program[0 .. program.Length - 2], threeBitsThatCanProduce (Array.last program))
+        ||> Array.foldBack (fun desiredOutput possibleSmallerBits ->
+            possibleSmallerBits
+            |> Array.collect (fun i ->
+                let shifted = i <<< 3
+                [| 0b000L .. 0b111L |] |> Array.map (fun bits -> shifted + bits))
+            |> Array.filter (fun bits -> outputFor bits = desiredOutput))
+        |> Array.min
 
 module Test =
 
@@ -118,10 +188,6 @@ module Test =
             testList "PartOne" [
                 testCase "solve works with sample input" (fun _ ->
                     test <@ PartOne.solveString sampleInput = "4,6,3,5,6,3,5,2,1,0" @>)
-            ]
-
-            testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
             ]
         ]
 
