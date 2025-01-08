@@ -1,7 +1,5 @@
 module Day17
 
-open Microsoft.FSharp.Core.Operators
-
 type ProgramState = {
     Program: int array
     RegA: int
@@ -62,17 +60,17 @@ let parse (lines: string array) =
 
 let executeInstruction (state: ProgramState) =
     match state.Opcode with
-    | 0 -> { state with RegA = state.RegA / pown 2 state.ComboOperand }, None
+    | 0 -> { state with RegA = state.RegA >>> state.ComboOperand }, None
     | 1 -> { state with RegB = state.RegB ^^^ state.LiteralOperand }, None
-    | 2 -> { state with RegB = state.ComboOperand % 8 }, None
+    | 2 -> { state with RegB = state.ComboOperand &&& 0b111 }, None
     | 3 ->
         match state.RegA with
         | 0 -> state, None
         | _ -> { state with InstrPointer = state.LiteralOperand - 2 }, None
     | 4 -> { state with RegB = state.RegB ^^^ state.RegC }, None
-    | 5 -> state, Some(state.ComboOperand % 8)
-    | 6 -> { state with RegB = state.RegA / pown 2 state.ComboOperand }, None
-    | 7 -> { state with RegC = state.RegA / pown 2 state.ComboOperand }, None
+    | 5 -> state, Some(state.ComboOperand &&& 0b111)
+    | 6 -> { state with RegB = state.RegA >>> state.ComboOperand }, None
+    | 7 -> { state with RegC = state.RegA >>> state.ComboOperand }, None
     | x -> failwith $"Invalid opcode %i{x}"
     |> Pair.mapFst (fun state -> { state with InstrPointer = state.InstrPointer + 2 })
 
