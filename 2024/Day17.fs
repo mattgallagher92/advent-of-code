@@ -2,9 +2,9 @@ module Day17
 
 type ProgramState = {
     Program: int array
-    RegA: int
-    RegB: int
-    RegC: int
+    RegA: int64
+    RegB: int64
+    RegC: int64
     InstrPointer: int
 } with
 
@@ -13,7 +13,7 @@ type ProgramState = {
 
     member this.ComboOperand =
         match this.Program[this.InstrPointer + 1] with
-        | x when -1 < x && x < 4 -> x
+        | x when -1 < x && x < 4 -> int64 x
         | 4 -> this.RegA
         | 5 -> this.RegB
         | 6 -> this.RegC
@@ -59,18 +59,20 @@ let parse (lines: string array) =
     | _ -> failwith $"Invalid input %A{lines}"
 
 let executeInstruction (state: ProgramState) =
+    let combo32 () = Checked.int32 state.ComboOperand
+
     match state.Opcode with
-    | 0 -> { state with RegA = state.RegA >>> state.ComboOperand }, None
+    | 0 -> { state with RegA = state.RegA >>> combo32 () }, None
     | 1 -> { state with RegB = state.RegB ^^^ state.LiteralOperand }, None
     | 2 -> { state with RegB = state.ComboOperand &&& 0b111 }, None
     | 3 ->
         match state.RegA with
-        | 0 -> state, None
+        | 0L -> state, None
         | _ -> { state with InstrPointer = state.LiteralOperand - 2 }, None
     | 4 -> { state with RegB = state.RegB ^^^ state.RegC }, None
     | 5 -> state, Some(state.ComboOperand &&& 0b111)
-    | 6 -> { state with RegB = state.RegA >>> state.ComboOperand }, None
-    | 7 -> { state with RegC = state.RegA >>> state.ComboOperand }, None
+    | 6 -> { state with RegB = state.RegA >>> combo32 () }, None
+    | 7 -> { state with RegC = state.RegA >>> combo32 () }, None
     | x -> failwith $"Invalid opcode %i{x}"
     |> Pair.mapFst (fun state -> { state with InstrPointer = state.InstrPointer + 2 })
 
@@ -98,76 +100,28 @@ module PartOne =
 
 module PartTwo =
 
-    // This is my puzzle input converted into F# code.
-    // Register A: 41644071
-    // Register B: 0
-    // Register C: 0
-    //
-    // Program: 2,4,1,2,7,5,1,7,4,4,0,3,5,5,3,0
-    let program () =
-        let mutable a = 41644071
-        let mutable b = 0
-        let mutable c = 0
-        let output = ResizeArray()
-
-        let loop () =
-            // 2, 4
-            b <- a % 0b1000
-            // 1, 2
-            b <- b ^^^ 0b010
-            // 7, 5
-            c <- a >>> b
-            // 1, 7
-            b <- b ^^^ 0b111
-            // 4, 4
-            b <- b ^^^ c
-            // 0, 3
-            a <- a >>> 3
-            // 5, 5
-            output.Add(b % 0b1000)
-
-        // 3, 0
-        while a > 0 do
-            loop ()
-
-        printfn $"%s{System.String.Join(',', output)}"
-
-    let refactoredProgram () =
-        let mutable a = 0b10011110110111000000100111
-        let output = ResizeArray()
-
-        let loop () =
-            // Last three bits of a, with bit 1 flipped (indexing from 0 from right).
-            let b = a % 0b1000 ^^^ 0b010
-            // Output bits b + 2 to b of a (indexing from 0 from right), with bit flipped if corresponding bit in b is 0.
-            output.Add((a >>> b) % 0b1000 ^^^ b ^^^ 0b111)
-            // Right shift a by 3.
-            a <- a >>> 3
-
-        while a > 0 do
-            loop ()
-
-        printfn $"%s{System.String.Join(',', output)}"
-
-    let outputFor (a: int64) =
-        let b = a % 0b1000L ^^^ 0b010 |> int
-        (a >>> b) % 0b1000L ^^^ b ^^^ 0b111
-
-    let threeBitsThatCanProduce output =
-        [| 0b000..0b111 |]
-        |> Array.filter (fun bits -> outputFor bits = output)
-        |> Array.map int64
-
     let solve (lines: string array) =
-        let program = lines |> parse |> _.Program |> Array.map int64
+        let state = lines |> parse
+        let program = state |> _.Program
 
-        (program[0 .. program.Length - 2], threeBitsThatCanProduce (Array.last program))
-        ||> Array.foldBack (fun desiredOutput possibleSmallerBits ->
-            possibleSmallerBits
+        let tails =
+            program
+            |> Array.map int64
+            |> Array.rev
+            |> Array.scan (fun prev curr -> curr :: prev) []
+
+        let threeBitsThatCanProduceLastOutput =
+            [| 0b000L .. 0b111L |]
+            |> Array.filter (fun input -> run { state with RegA = input } = tails[1])
+
+        // First two elements of tails are [] and [ lastOutput ]
+        (threeBitsThatCanProduceLastOutput, tails[2..])
+        ||> Array.fold (fun inputsThatProduceLaterOutputs desiredOutput ->
+            inputsThatProduceLaterOutputs
             |> Array.collect (fun i ->
                 let shifted = i <<< 3
                 [| 0b000L .. 0b111L |] |> Array.map (fun bits -> shifted + bits))
-            |> Array.filter (fun bits -> outputFor bits = desiredOutput))
+            |> Array.filter (fun input -> run { state with RegA = input } = desiredOutput))
         |> Array.min
 
 module Test =
