@@ -70,7 +70,7 @@ let executeInstruction (state: ProgramState) =
         | 0L -> state, None
         | _ -> { state with InstrPointer = state.LiteralOperand - 2 }, None
     | 4 -> { state with RegB = state.RegB ^^^ state.RegC }, None
-    | 5 -> state, Some(state.ComboOperand &&& 0b111)
+    | 5 -> state, Some(Checked.int (state.ComboOperand &&& 0b111))
     | 6 -> { state with RegB = state.RegA >>> combo32 () }, None
     | 7 -> { state with RegC = state.RegA >>> combo32 () }, None
     | x -> failwith $"Invalid opcode %i{x}"
@@ -106,23 +106,31 @@ module PartTwo =
 
         let tails =
             program
-            |> Array.map int64
             |> Array.rev
             |> Array.scan (fun prev curr -> curr :: prev) []
+            |> Array.skip 1
 
-        let threeBitsThatCanProduceLastOutput =
-            [| 0b000L .. 0b111L |]
-            |> Array.filter (fun input -> run { state with RegA = input } = tails[1])
+        let next = [| 0b000L .. 0b111L |]
 
-        // First two elements of tails are [] and [ lastOutput ]
-        (threeBitsThatCanProduceLastOutput, tails[2..])
-        ||> Array.fold (fun inputsThatProduceLaterOutputs desiredOutput ->
-            inputsThatProduceLaterOutputs
-            |> Array.collect (fun i ->
-                let shifted = i <<< 3
-                [| 0b000L .. 0b111L |] |> Array.map (fun bits -> shifted + bits))
-            |> Array.filter (fun input -> run { state with RegA = input } = desiredOutput))
-        |> Array.min
+        // NOTE: Check out Git history for different algorithms.
+        let rec inner depth (inputThatProducesLaterOutputs: int64) =
+            if run { state with RegA = inputThatProducesLaterOutputs } = Array.toList program then
+                Some inputThatProducesLaterOutputs
+            else
+                let desiredOutput = tails[depth]
+                let shifted = inputThatProducesLaterOutputs <<< 3
+
+                next
+                |> Seq.choose (fun bits ->
+                    let input = shifted + bits
+
+                    if run { state with RegA = input } = desiredOutput then
+                        inner (depth + 1) input
+                    else
+                        None)
+                |> Seq.tryHead
+
+        inner 0 0 |> Option.defaultWith (fun _ -> failwith "No solution found.")
 
 module Test =
 
