@@ -54,8 +54,6 @@ module PartTwo =
         let exit = maxCoordinate, maxCoordinate
 
         let canReachEndAfter elapsedNanos =
-            printfn $"elapsedNanos: %i{elapsedNanos}"
-
             let uncorrupted =
                 [|
                     for x in 0..maxCoordinate do
@@ -86,8 +84,8 @@ module PartTwo =
             |> Set.contains start
 
         [| skipFirst .. corrupted.Length |]
-        |> Seq.find (fun elapsedNanos -> not (canReachEndAfter elapsedNanos))
-        |> fun nanos -> corrupted[nanos - 1]
+        |> Array.findFirstIndexQuickly (fun elapsedNanos -> not (canReachEndAfter elapsedNanos))
+        |> fun nanos -> corrupted[skipFirst + nanos - 1]
 
     let solve (lines: string array) =
         let answer = solve' 1024 70 lines

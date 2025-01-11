@@ -20,6 +20,22 @@ module Array =
     let withIndexMatching predicate xs =
         xs |> Array.indexed |> Array.filter (fst >> predicate) |> Array.map snd
 
+    let rec private findFirstInternal bad good predicate (xs: 'a array) =
+        if bad + 1 = good then
+            good
+        else
+            let test = (bad + good) / 2
+            if predicate xs[test] then
+                findFirstInternal bad test predicate xs
+            else
+                findFirstInternal test good predicate xs
+
+    /// Finds the first element matching predicate, assuming that they all don't match up to a point, then all match.
+    // TODO: add property-based test to compare against findIndex.
+    let findFirstIndexQuickly predicate xs =
+        let n = xs |> Array.length
+        findFirstInternal 0 (n - 1) predicate xs
+
 [<RequireQualifiedAccess>]
 module Int32 =
     let tryParse (s: string) =
