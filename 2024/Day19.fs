@@ -6,9 +6,7 @@ module PartOne =
 
     let solve (lines: string array) =
         let towels = lines[0].Split ", "
-        let desiredPatterns = lines[2..]
-
-        let cache = towels |> Array.map (fun t -> KeyValuePair(t, true)) |> Dictionary
+        let cache = Dictionary [ KeyValuePair("", true) ]
 
         let rec isPossible pattern =
             cache.TryGet pattern
@@ -22,7 +20,7 @@ module PartOne =
                 cache[pattern] <- b
                 b)
 
-        desiredPatterns |> Array.filter isPossible |> Array.length
+        lines[2..] |> Array.filter isPossible |> Array.length
 
 module PartTwo =
 
@@ -30,8 +28,6 @@ module PartTwo =
 
     let solve (lines: string array) =
         let towels = lines[0].Split ", "
-        let desiredPatterns = lines[2..]
-
         let cache = Dictionary [ KeyValuePair("", 1L) ]
 
         let rec numPossiblePatterns pattern =
@@ -48,7 +44,7 @@ module PartTwo =
                 cache[pattern] <- n
                 n)
 
-        desiredPatterns |> Array.sumBy numPossiblePatterns
+        lines[2..] |> Array.sumBy numPossiblePatterns
 
 module Test =
 
