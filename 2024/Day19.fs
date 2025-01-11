@@ -26,7 +26,29 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    open System.Collections.Generic
+
+    let solve (lines: string array) =
+        let towels = lines[0].Split ", "
+        let desiredPatterns = lines[2..]
+
+        let cache = Dictionary [ KeyValuePair("", 1L) ]
+
+        let rec numPossiblePatterns pattern =
+            cache.TryGet pattern
+            |> Option.defaultWith (fun _ ->
+                let n =
+                    towels
+                    |> Array.sumBy (fun t ->
+                        if pattern.StartsWith t then
+                            numPossiblePatterns (pattern[t.Length ..])
+                        else
+                            0)
+
+                cache[pattern] <- n
+                n)
+
+        desiredPatterns |> Array.sumBy numPossiblePatterns
 
 module Test =
 
@@ -53,7 +75,7 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 16 @>)
             ]
         ]
 
