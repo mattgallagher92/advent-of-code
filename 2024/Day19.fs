@@ -2,36 +2,27 @@ module Day19
 
 module PartOne =
 
+    open System.Collections.Generic
+
     let solve (lines: string array) =
         let towels = lines[0].Split ", "
         let desiredPatterns = lines[2..]
-        let maxDesiredLength = desiredPatterns |> Array.map _.Length |> Array.max
 
-        let rec inner n m =
-            printfn $"%i{n}"
+        let cache = towels |> Array.map (fun t -> KeyValuePair(t, true)) |> Dictionary
 
-            if n <= maxDesiredLength then
-                let lengthNPatterns =
+        let rec isPossible pattern =
+            cache.TryGet pattern
+            |> Option.defaultWith (fun _ ->
+                let b =
                     towels
-                    |> Array.map (fun t ->
-                        if t.Length = n then
-                            set [ t ]
-                        else
-                            m
-                            |> Map.tryFind (n - t.Length)
-                            |> Option.map (Set.map (fun p -> $"%s{p}{t}"))
-                            |> Option.defaultValue Set.empty)
-                    |> Set.unionMany
+                    |> Seq.map (fun t -> pattern.StartsWith t && isPossible (pattern[t.Length ..]))
+                    |> Seq.tryFind id
+                    |> Option.defaultValue false
 
-                m |> Map.add n lengthNPatterns |> inner (n + 1)
-            else
-                m
+                cache[pattern] <- b
+                b)
 
-        let patternMap = inner 0 Map.empty
-
-        desiredPatterns
-        |> Array.filter (fun p -> patternMap[p.Length].Contains p)
-        |> Array.length
+        desiredPatterns |> Array.filter isPossible |> Array.length
 
 module PartTwo =
 
