@@ -42,7 +42,57 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    let solve' skipFirst maxCoordinate (lines: string array) =
+        let corrupted =
+            lines
+            |> Array.map (
+                Regex.regexMatch "(\d+),(\d+)"
+                >> fun m -> int m.Groups[1].Value, int m.Groups[2].Value
+            )
+
+        let start = 0, 0
+        let exit = maxCoordinate, maxCoordinate
+
+        let canReachEndAfter elapsedNanos =
+            printfn $"elapsedNanos: %i{elapsedNanos}"
+
+            let uncorrupted =
+                [|
+                    for x in 0..maxCoordinate do
+                        for y in 0..maxCoordinate do
+                            x, y
+                |]
+                |> Array.except (corrupted |> Array.take elapsedNanos)
+                |> set
+
+            let neighbours (x, y) =
+                set [ x - 1, y; x, y - 1; x, y + 1; x + 1, y ]
+                |> Set.filter uncorrupted.Contains
+
+            (set [ exit ], set [ exit ])
+            |> Array.unfold (fun (alreadyVisited, coordinatesAtPreviousDistance) ->
+                if
+                    Set.isEmpty coordinatesAtPreviousDistance
+                    || Set.contains start coordinatesAtPreviousDistance
+                then
+                    None
+                else
+                    let ns = coordinatesAtPreviousDistance |> Set.map neighbours |> Set.unionMany
+
+                    let newCoords = Set.difference ns alreadyVisited
+                    let visited = Set.union alreadyVisited newCoords
+                    Some(newCoords, (visited, newCoords)))
+            |> Array.last
+            |> Set.contains start
+
+        [| skipFirst .. corrupted.Length |]
+        |> Seq.find (fun elapsedNanos -> not (canReachEndAfter elapsedNanos))
+        |> fun nanos -> corrupted[nanos - 1]
+
+    let solve (lines: string array) =
+        let answer = solve' 1024 70 lines
+        printfn $"Day 18 Part Two answer: %A{answer}"
+        fst answer * 100 + snd answer
 
 module Test =
 
@@ -84,7 +134,7 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve' 12 6 sampleInput = (6, 1) @>)
             ]
         ]
 
