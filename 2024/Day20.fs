@@ -32,12 +32,18 @@ module PartOne =
         |> fun ps -> [| yield! ps; endPos |]
 
     let allCheats map =
-        map
-        |> orderedTrackPositions
-        |> Array.indexed
-        // TODO: this is an n^2 op; consider precomputing lookups.
-        |> fun xs -> Array.allPairs xs xs
-        |> Array.filter (fun ((d1, p1), (d2, p2)) -> d2 > d1 + 2 && Pair.ortholinearDistance p1 p2 = 2)
+        let ixdTrackPositions = map |> orderedTrackPositions |> Array.indexed
+        let posToIx = ixdTrackPositions |> Array.map (fun (i, p) -> p, i) |> dict
+        let relativePositionsToCheck = [| -2, 0; -1, -1; -1, +1; 0, -2; 0, +2; +1, -1; +1, +1; +2, 0 |]
+
+        ixdTrackPositions
+        |> Array.collect (fun (d0, p0) ->
+            relativePositionsToCheck
+            |> Array.choose (fun rp ->
+                let p = rp |> Pair.add p0
+
+                posToIx.TryGet p
+                |> Option.bind (fun d -> if d > d0 + 2 then Some((d0, p0), (d, p)) else None)))
         |> Array.map (fun ((d1, p1), (d2, p2)) -> { From = p1; To = p2; Saving = d2 - d1 - 2 })
 
     let solve lines =
