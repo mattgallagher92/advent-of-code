@@ -32,28 +32,12 @@ module PartOne =
         |> fun ps -> [| yield! ps; endPos |]
 
     let allCheats map =
-        let trackPositions = map |> orderedTrackPositions
-        let ixdTrackPositions = trackPositions |> Array.indexed
-
-        let wallPositions =
-            let all = map |> Array2D.indexes |> set
-            Set.difference all (set trackPositions)
+        map
+        |> orderedTrackPositions
+        |> Array.indexed
         // TODO: this is an n^2 op; consider precomputing lookups.
-        Array.allPairs ixdTrackPositions ixdTrackPositions
-        |> Array.filter (fun ((d1, p1), (d2, p2)) ->
-            let possibleRequiredWall () =
-                match p2 |> Pair.subtract p1 with
-                | -2, 0 -> [| p1 |> Pair.add (-1, 0) |]
-                | 0, -2 -> [| p1 |> Pair.add (0, -1) |]
-                | 0, +2 -> [| p1 |> Pair.add (0, +1) |]
-                | +2, 0 -> [| p1 |> Pair.add (+1, 0) |]
-                | -1, -1 -> [| p1 |> Pair.add (-1, 0); p1 |> Pair.add (0, -1) |]
-                | -1, +1 -> [| p1 |> Pair.add (-1, 0); p1 |> Pair.add (0, +1) |]
-                | +1, -1 -> [| p1 |> Pair.add (+1, 0); p1 |> Pair.add (0, -1) |]
-                | +1, +1 -> [| p1 |> Pair.add (+1, 0); p1 |> Pair.add (0, +1) |]
-                | _ -> [||]
-
-            d2 > d1 + 2 && possibleRequiredWall () |> Array.exists wallPositions.Contains)
+        |> fun xs -> Array.allPairs xs xs
+        |> Array.filter (fun ((d1, p1), (d2, p2)) -> d2 > d1 + 2 && Pair.ortholinearDistance p1 p2 = 2)
         |> Array.map (fun ((d1, p1), (d2, p2)) -> { From = p1; To = p2; Saving = d2 - d1 - 2 })
 
     let solve lines =
