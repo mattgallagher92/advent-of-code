@@ -25,6 +25,7 @@ module Array =
             good
         else
             let test = (bad + good) / 2
+
             if predicate xs[test] then
                 findFirstInternal bad test predicate xs
             else
@@ -62,7 +63,9 @@ module Pair =
 
     let mapFst f (x, y) = f x, y
 
-    let add (x1, y1) (x2, y2) = x1 + x2, y1 + y2
+    let add (x2, y2) (x1, y1) = x1 + x2, y1 + y2
+
+    let subtract (x2, y2) (x1, y1) = x1 - x2, y1 - y2
 
 [<RequireQualifiedAccess>]
 module Option =
