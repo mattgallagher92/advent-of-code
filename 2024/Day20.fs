@@ -1,7 +1,5 @@
 module Day20
 
-open System
-
 let parse (lines: string array) =
     lines |> Array.map Seq.toArray |> array2D
 
