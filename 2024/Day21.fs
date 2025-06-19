@@ -103,35 +103,38 @@ module PartOne =
     /// Returns a string representing all movements in each required direction, one direction at a time, to minimise
     /// the amount of button presses required in the subsequent expansions.
     let shortestPathDirectional (x, y) =
-        let rX, cX = directionalRow x, directionalCol x
-        let rY, cY = directionalRow y, directionalCol y
-        let rDiff = rY - rX
-        let cDiff = cY - cX
-
-        let up () = String.replicate rDiff Up
-        let down () = String.replicate -rDiff Down
-        let right () = String.replicate cDiff Right
-        let left () = String.replicate -cDiff Left
-
-        let move =
-            // To keep the next expansions as small as possible: if the move requires multiple directions, make all
-            // moves in one direction followed by all moves in the other; prefer to go left first, then up/down,
-            // then right, unless doing so would result in going over a blank space on the grid. The direction
-            // preference can be seen by trying alternative oreders and comparing the results after a few expansions.
-            match rDiff, cDiff with
-            | Positive, Positive when x = '<' -> $"%s{right ()}%s{up ()}"
-            | Positive, Positive -> $"%s{up ()}%s{right ()}"
-            | Positive, Zero -> $"%s{up ()}"
-            | Positive, Negative -> $"%s{left ()}%s{up ()}"
-            | Zero, Positive -> $"%s{right ()}"
-            | Zero, Zero -> ""
-            | Zero, Negative -> $"%s{left ()}"
-            | Negative, Positive -> $"%s{down ()}%s{right ()}"
-            | Negative, Zero -> $"%s{down ()}"
-            | Negative, Negative when y = '<' -> $"%s{down ()}%s{left ()}"
-            | Negative, Negative -> $"%s{left ()}%s{down ()}"
-
-        $"%s{move}A"
+        // To keep the next expansions as small as possible: if the move requires multiple directions, make all
+        // moves in one direction followed by all moves in the other; prefer to go left first, then up/down,
+        // then right, unless doing so would result in going over a blank space on the grid. The direction
+        // preference can be seen by trying alternative orders and comparing the results after a few expansions.
+        match x, y with
+        | '<', '<' -> ""
+        | '<', 'v' -> ">"
+        | '<', '^' -> ">^"
+        | '<', '>' -> ">>"
+        | '<', 'A' -> ">>^"
+        | 'v', '<' -> "<"
+        | 'v', 'v' -> ""
+        | 'v', '^' -> "^"
+        | 'v', '>' -> ">"
+        | 'v', 'A' -> "^>"
+        | '^', '<' -> "v<"
+        | '^', 'v' -> "v"
+        | '^', '^' -> ""
+        | '^', '>' -> "v>"
+        | '^', 'A' -> ">"
+        | '>', '<' -> "<<"
+        | '>', 'v' -> "<"
+        | '>', '^' -> "<^"
+        | '>', '>' -> ""
+        | '>', 'A' -> "^"
+        | 'A', '<' -> "v<<"
+        | 'A', 'v' -> "<v"
+        | 'A', '^' -> "<"
+        | 'A', '>' -> "v"
+        | 'A', 'A' -> ""
+        | _ -> failwith $"Invalid directional buttons (%c{x}, %c{y})"
+        |> fun move -> $"%s{move}A"
 
     let expandNumeric numericButtonPresses =
         // Start at A.
