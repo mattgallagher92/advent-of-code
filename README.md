@@ -4,5 +4,5 @@ This repo contains my solutions for [advent of code](https://adventofcode.com/) 
 
 | Year | Stars | Language |
 | ---- | ----- | -------- |
-| 2024 | 42    | F#       |
+| 2024 | 43    | F#       |
 | 2023 | 50    | F#       |
