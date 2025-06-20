@@ -40,6 +40,7 @@
   <ItemGroup>
     <PackageReference Include="Expecto.FsCheck" Version="10.2.1" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="4.18.0" />
+    <PackageReference Include="MathNet.Numerics.FSharp" Version="5.0.0" />
     <PackageReference Include="Unquote" Version="7.0.1" />
   </ItemGroup>
 
