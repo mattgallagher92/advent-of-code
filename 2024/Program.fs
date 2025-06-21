@@ -24,6 +24,7 @@ let dayFns day =
     | 20 -> Day20.dayFns
     | 21 -> Day21.dayFns
     | 22 -> Day22.dayFns
+    | 23 -> Day23.dayFns
     | _ -> failwith $"Unrecognized day %i{day}"
 
 [<EntryPoint>]
