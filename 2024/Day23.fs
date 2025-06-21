@@ -1,48 +1,45 @@
 module Day23
 
-open System.Collections.Generic
-
-/// Keys are computer names, values are sets of names of computers that key computer is connected to.
-// TODO: could we save some computation time by avoiding storing duplicate connections? E.g. use alphabetical order.
-let parseConnectionGraph (lines: string array) =
+let edges (lines: string array) =
     lines
-    |> Array.map (fun s -> s[0..1], s[3..4])
-    |> Array.collect (fun (a, b) -> [| a, b; b, a |])
+    |> Array.collect (fun s -> [| s[0..1], s[3..4]; s[3..4], s[0..1] |])
+    |> set
+
+let vertices edges =
+    edges |> Set.map (fun (a, b) -> set [ a; b ]) |> Set.unionMany
+
+let graph edges =
+    edges
+    |> Seq.toArray
     |> Array.groupBy fst
     |> Array.mapSnd (Array.map snd >> set)
     |> dict
 
-/// Finds connected triples where at least one of the computer names matches the predicate.
-/// Returned computer names are in alphabetical order, for uniqueness.
-let findConnectedTriples predicate (conns: IDictionary<string, Set<string>>) =
-    conns
-    |> Seq.collect (fun kvp ->
-        // For every key starting with t,
-        if predicate kvp.Key then
-            // For all pairs from connected set,
-            kvp.Value
-            |> Seq.allPairs kvp.Value
-            |> Seq.collect (fun (c1, c2) ->
-                // Check whether the second is in the first's connected set. If so, that's a connected triple.
-                if conns[c1] |> Set.contains c2 then
-                    [| (kvp.Key, c1, c2) |]
-                else
-                    [||])
-        else
-            [||])
-    // Deduplicate triples by sorting names.
-    |> Seq.map (fun (a, b, c) ->
-        let sorted = [| a; b; c |] |> Array.sort
-        sorted[0], sorted[1], sorted[2])
-    |> set
-
 module PartOne =
 
+    let findConnectedTriples predicate lines =
+        let es = edges lines
+        let vs = vertices es
+        let g = graph es
+
+        let isEdge e = es |> Set.contains e
+
+        vs
+        |> Set.filter predicate
+        |> Seq.collect (fun v ->
+            let neighbours = g[v]
+
+            neighbours
+            |> Seq.allPairs neighbours
+            |> Seq.choose (fun (n1, n2) -> if isEdge (n1, n2) then Some(v, n1, n2) else None))
+        // Deduplicate triples by sorting names.
+        |> Seq.map (fun (a, b, c) ->
+            let sorted = [| a; b; c |] |> Array.sort
+            sorted[0], sorted[1], sorted[2])
+        |> set
+
     let solve (lines: string array) =
-        lines
-        |> parseConnectionGraph
-        |> findConnectedTriples (fun s -> s.StartsWith 't')
-        |> Seq.length
+        lines |> findConnectedTriples (fun s -> s.StartsWith 't') |> _.Count
 
 module PartTwo =
 
@@ -53,26 +50,20 @@ module PartTwo =
             (edges, t) ||> maxCliqueContaining (h :: subClique)
         | _ :: t -> (edges, t) ||> maxCliqueContaining subClique
 
-    let password (lines: string array) =
-
-        let edges =
-            lines
-            |> Array.map (fun s -> s[0..1], s[3..4])
-            |> Array.collect (fun (a, b) -> [| a, b; b, a |])
-            |> set
-
-        let vertices =
-            edges |> Set.map (fun (a, b) -> set [ a; b ]) |> Set.unionMany |> List.ofSeq
+    let maxClique edges =
+        let vertices = vertices edges
 
         vertices
-        |> Seq.map (fun v -> (edges, vertices) ||> maxCliqueContaining [ v ])
+        |> Seq.map (fun v -> (edges, Set.toList vertices) ||> maxCliqueContaining [ v ])
         |> Seq.maxBy _.Length
-        |> List.sort
-        |> String.concat ","
+
+    let password maxClique =
+        maxClique |> List.sort |> String.concat ","
 
     let solve (lines: string array) =
-        lines |> password |> printfn "The password is '%s'"
-        -1
+        let lanParty = lines |> edges |> maxClique
+        printfn $"The password is '%s{password lanParty}'"
+        lanParty.Length
 
 module Test =
 
@@ -119,9 +110,7 @@ module Test =
             testCase "correct triples are found from sample input" (fun _ ->
                 test
                     <@
-                        sampleInput
-                        |> parseConnectionGraph
-                        |> findConnectedTriples (fun s -> s.StartsWith 't') = set [
+                        sampleInput |> PartOne.findConnectedTriples (fun s -> s.StartsWith 't') = set [
                             "co", "de", "ta"
                             "co", "ka", "ta"
                             "de", "ka", "ta"
@@ -137,8 +126,8 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "password works with sample input" (fun _ ->
-                    test <@ PartTwo.password sampleInput = "co,de,ka,ta" @>)
+                testCase "works with sample input" (fun _ ->
+                    test <@ sampleInput |> edges |> PartTwo.maxClique |> PartTwo.password = "co,de,ka,ta" @>)
             ]
         ]
 
