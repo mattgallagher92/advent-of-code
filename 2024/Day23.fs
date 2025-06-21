@@ -1,8 +1,8 @@
 module Day23
 
-module PartOne =
+open System.Collections.Generic
 
-    open System.Collections.Generic
+module PartOne =
 
     /// Keys are computer names, values are sets of names of computers that key computer is connected to.
     // TODO: could we save some computation time by avoiding storing duplicate connections? E.g. use alphabetical order.
@@ -44,9 +44,62 @@ module PartOne =
         |> findConnectedTriplesContainingComputerWhoseNameStartWithT
         |> Seq.length
 
+/// See https://en.wikipedia.org/wiki/Disjoint-set_data_structure.
+// TODO: move
+type DisjointSet<'a when 'a: equality>() =
+    let parent = Dictionary<'a, 'a>()
+    let size = Dictionary<'a, int>()
+
+    member private this.Find x =
+        if not (parent.ContainsKey x) then
+            parent[x] <- x
+            size[x] <- 1
+
+        if parent[x] <> x then
+            // Compress paths to make navigation to root quicker in future.
+            parent[x] <- this.Find(parent[x])
+
+        parent[x]
+
+    /// Indicates that two nodes are part of the same component, creating nodes if necessary.
+    member this.Union x y =
+        let xRoot = this.Find x
+        let yRoot = this.Find y
+
+        if xRoot <> yRoot then
+            if size[xRoot] > size[yRoot] then
+                parent[yRoot] <- xRoot
+                size[xRoot] <- size[yRoot] + size[xRoot]
+            else
+                parent[xRoot] <- yRoot
+                size[yRoot] <- size[xRoot] + size[yRoot]
+
+    /// Whether two nodes are part of the same component.
+    member this.IsConnectedTo x y = this.Find x = this.Find y
+
+    member _.LargestConnectedComponent() =
+        let root = size |> Seq.maxBy _.Value |> _.Key
+
+        parent
+        |> Seq.choose (fun kvp -> if kvp.Value = root then Some kvp.Key else None)
+
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    let password (lines: string array) =
+
+        // TODO: Whoops! This gets the maximum connected component, but we want the maximum complete subgraph (aka maximum clique).
+        let cs =
+            let ds = DisjointSet<_>()
+            lines |> Array.iter (fun s -> ds.Union (s[0..1]) (s[3..4]))
+            ds.LargestConnectedComponent() |> Seq.sort
+
+
+        System.String.Join(',', cs)
+
+    let solve (lines: string array) =
+
+        lines |> password |> printfn "The password is '%s'"
+        -1
 
 module Test =
 
@@ -111,7 +164,8 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "password works with sample input" (fun _ ->
+                    test <@ PartTwo.password sampleInput = "co,de,ka,ta" @>)
             ]
         ]
 
