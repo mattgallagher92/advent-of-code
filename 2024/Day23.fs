@@ -2,102 +2,75 @@ module Day23
 
 open System.Collections.Generic
 
+/// Keys are computer names, values are sets of names of computers that key computer is connected to.
+// TODO: could we save some computation time by avoiding storing duplicate connections? E.g. use alphabetical order.
+let parseConnectionGraph (lines: string array) =
+    lines
+    |> Array.map (fun s -> s[0..1], s[3..4])
+    |> Array.collect (fun (a, b) -> [| a, b; b, a |])
+    |> Array.groupBy fst
+    |> Array.mapSnd (Array.map snd >> set)
+    |> dict
+
+/// Finds connected triples where at least one of the computer names matches the predicate.
+/// Returned computer names are in alphabetical order, for uniqueness.
+let findConnectedTriples predicate (conns: IDictionary<string, Set<string>>) =
+    conns
+    |> Seq.collect (fun kvp ->
+        // For every key starting with t,
+        if predicate kvp.Key then
+            // For all pairs from connected set,
+            kvp.Value
+            |> Seq.allPairs kvp.Value
+            |> Seq.collect (fun (c1, c2) ->
+                // Check whether the second is in the first's connected set. If so, that's a connected triple.
+                if conns[c1] |> Set.contains c2 then
+                    [| (kvp.Key, c1, c2) |]
+                else
+                    [||])
+        else
+            [||])
+    // Deduplicate triples by sorting names.
+    |> Seq.map (fun (a, b, c) ->
+        let sorted = [| a; b; c |] |> Array.sort
+        sorted[0], sorted[1], sorted[2])
+    |> set
+
 module PartOne =
-
-    /// Keys are computer names, values are sets of names of computers that key computer is connected to.
-    // TODO: could we save some computation time by avoiding storing duplicate connections? E.g. use alphabetical order.
-    let parseConnectionGraph (lines: string array) =
-        lines
-        |> Array.map (fun s -> s[0..1], s[3..4])
-        |> Array.collect (fun (a, b) -> [| a, b; b, a |])
-        |> Array.groupBy fst
-        |> Array.mapSnd (Array.map snd >> set)
-        |> dict
-
-    /// Returned computer names are in alphabetical order, for uniqueness.
-    // TODO: terser name
-    let findConnectedTriplesContainingComputerWhoseNameStartWithT (conns: IDictionary<string, Set<string>>) =
-        conns
-        |> Seq.collect (fun kvp ->
-            // For every key starting with t,
-            if kvp.Key.StartsWith 't' then
-                // For all pairs from connected set,
-                kvp.Value
-                |> Seq.allPairs kvp.Value
-                |> Seq.collect (fun (c1, c2) ->
-                    // Check whether the second is in the first's connected set. If so, that's a connected triple.
-                    if conns[c1] |> Set.contains c2 then
-                        [| (kvp.Key, c1, c2) |]
-                    else
-                        [||])
-            else
-                [||])
-        // Deduplicate triples by sorting names.
-        |> Seq.map (fun (a, b, c) ->
-            let sorted = [| a; b; c |] |> Array.sort
-            sorted[0], sorted[1], sorted[2])
-        |> set
 
     let solve (lines: string array) =
         lines
         |> parseConnectionGraph
-        |> findConnectedTriplesContainingComputerWhoseNameStartWithT
+        |> findConnectedTriples (fun s -> s.StartsWith 't')
         |> Seq.length
-
-/// See https://en.wikipedia.org/wiki/Disjoint-set_data_structure.
-// TODO: move
-type DisjointSet<'a when 'a: equality>() =
-    let parent = Dictionary<'a, 'a>()
-    let size = Dictionary<'a, int>()
-
-    member private this.Find x =
-        if not (parent.ContainsKey x) then
-            parent[x] <- x
-            size[x] <- 1
-
-        if parent[x] <> x then
-            // Compress paths to make navigation to root quicker in future.
-            parent[x] <- this.Find(parent[x])
-
-        parent[x]
-
-    /// Indicates that two nodes are part of the same component, creating nodes if necessary.
-    member this.Union x y =
-        let xRoot = this.Find x
-        let yRoot = this.Find y
-
-        if xRoot <> yRoot then
-            if size[xRoot] > size[yRoot] then
-                parent[yRoot] <- xRoot
-                size[xRoot] <- size[yRoot] + size[xRoot]
-            else
-                parent[xRoot] <- yRoot
-                size[yRoot] <- size[xRoot] + size[yRoot]
-
-    /// Whether two nodes are part of the same component.
-    member this.IsConnectedTo x y = this.Find x = this.Find y
-
-    member _.LargestConnectedComponent() =
-        let root = size |> Seq.maxBy _.Value |> _.Key
-
-        parent
-        |> Seq.choose (fun kvp -> if kvp.Value = root then Some kvp.Key else None)
 
 module PartTwo =
 
+    let rec maxCliqueContaining subClique edges leftToTest =
+        match leftToTest with
+        | [] -> subClique
+        | h :: t when subClique |> List.forall (fun v -> edges |> Set.contains (v, h)) ->
+            (edges, t) ||> maxCliqueContaining (h :: subClique)
+        | _ :: t -> (edges, t) ||> maxCliqueContaining subClique
+
     let password (lines: string array) =
 
-        // TODO: Whoops! This gets the maximum connected component, but we want the maximum complete subgraph (aka maximum clique).
-        let cs =
-            let ds = DisjointSet<_>()
-            lines |> Array.iter (fun s -> ds.Union (s[0..1]) (s[3..4]))
-            ds.LargestConnectedComponent() |> Seq.sort
+        let edges =
+            lines
+            |> Array.map (fun s -> s[0..1], s[3..4])
+            |> Array.collect (fun (a, b) -> [| a, b; b, a |])
+            |> set
 
+        let vertices =
+            edges |> Set.map (fun (a, b) -> set [ a; b ]) |> Set.unionMany |> List.ofSeq
 
-        System.String.Join(',', cs)
+        vertices
+        |> Seq.map (fun v -> (edges, vertices) ||> maxCliqueContaining [ v ])
+        |> Seq.maxBy _.Length
+        |> List.sort
+        |> String.concat ","
 
     let solve (lines: string array) =
-
         lines |> password |> printfn "The password is '%s'"
         -1
 
@@ -143,23 +116,23 @@ module Test =
                 "td-yn"
             |]
 
-            testList "PartOne" [
-                testCase "correct triples are found from sample input" (fun _ ->
-                    test
-                        <@
-                            sampleInput
-                            |> PartOne.parseConnectionGraph
-                            |> PartOne.findConnectedTriplesContainingComputerWhoseNameStartWithT = set [
-                                "co", "de", "ta"
-                                "co", "ka", "ta"
-                                "de", "ka", "ta"
-                                "qp", "td", "wh"
-                                "tb", "vc", "wq"
-                                "tc", "td", "wh"
-                                "td", "wh", "yn"
-                            ]
-                        @>)
+            testCase "correct triples are found from sample input" (fun _ ->
+                test
+                    <@
+                        sampleInput
+                        |> parseConnectionGraph
+                        |> findConnectedTriples (fun s -> s.StartsWith 't') = set [
+                            "co", "de", "ta"
+                            "co", "ka", "ta"
+                            "de", "ka", "ta"
+                            "qp", "td", "wh"
+                            "tb", "vc", "wq"
+                            "tc", "td", "wh"
+                            "td", "wh", "yn"
+                        ]
+                    @>)
 
+            testList "PartOne" [
                 testCase "solve works with sample input" (fun _ -> test <@ PartOne.solve sampleInput = 7 @>)
             ]
 
