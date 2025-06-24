@@ -44,41 +44,174 @@ let parse (lines: string array) =
 
         values, gates
 
+/// Given gates and initial values, returns the z bits from least to most significant.
+/// Also updates values to store all wire values.
+let zBits (values: Dictionary<string, byte>) (gates: IDictionary<string, Gate>) =
+    let rec getValue wire =
+        match values.TryGet wire with
+        | Some v -> v
+        | None ->
+            let g = gates[wire]
+
+            let v =
+                match g.Kind, getValue g.I1, getValue g.I2 with
+                | AND, i1, i2 -> i1 &&& i2
+                | OR, i1, i2 -> i1 ||| i2
+                | XOR, i1, i2 -> i1 ^^^ i2
+
+            values[wire] <- v
+            v
+
+    gates.Keys
+    |> Seq.filter (fun g -> g.StartsWith 'z')
+    |> Seq.sort
+    |> Seq.toArray
+    |> Array.map getValue
+
+/// Assumes bits are least to most significant.
+let toInt64 bits =
+    ((0L, 1L), bits)
+    ||> Array.fold (fun (acc, placeValue) zv -> acc + placeValue * int64 zv, placeValue * 2L)
+    |> fst
+
 module PartOne =
 
-    let solve (lines: string array) =
-        let values, gates = lines |> parse
-
-        let rec getValue wire =
-            match values.TryGet wire with
-            | Some v -> v
-            | None ->
-                let g = gates[wire]
-
-                let v =
-                    match g.Kind, getValue g.I1, getValue g.I2 with
-                    | AND, i1, i2 -> i1 &&& i2
-                    | OR, i1, i2 -> i1 ||| i2
-                    | XOR, i1, i2 -> i1 ^^^ i2
-
-                values[wire] <- v
-                v
-
-        let zValues =
-            gates.Keys
-            |> Seq.filter (fun g -> g.StartsWith 'z')
-            // Least to most significant
-            |> Seq.sort
-            |> Seq.toArray
-            |> Array.map getValue
-
-        ((0L, 1L), zValues)
-        ||> Array.fold (fun (acc, placeValue) zv -> acc + placeValue * int64 zv, placeValue * 2L)
-        |> fst
+    let solve (lines: string array) = lines |> parse ||> zBits |> toInt64
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    open FsToolkit.ErrorHandling
+
+    /// The indexes of the bits that make up x and y, from least to most significant.
+    let places = [| 0..44 |]
+
+    /// Returns the first i for which x = 2^(i+1) - 1 and y = 1 does not give z = 2^(i+1), and the corresponding z.
+    let firstIncorrectAddition gates =
+        places
+        |> Seq.map (fun i ->
+            let vs =
+                places
+                |> Array.collect (fun j -> [|
+                    $"x%02i{j}", if j <= i then 1uy else 0uy
+                    $"y%02i{j}", if j = 0 then 1uy else 0uy
+                |])
+                |> dict
+                |> Dictionary
+
+            let zs = zBits vs gates
+
+            let isCorrect =
+                zs
+                |> Array.indexed
+                |> Array.forall (fun (j, b) -> b = if j = i + 1 then 1uy else 0uy)
+
+            isCorrect, (i, zs))
+        |> Seq.tryFind (not << fst)
+        |> Option.map snd
+
+    let test gates =
+        gates
+        |> firstIncorrectAddition
+        |> Option.map (fun (i, zs) -> printfn $"Error in %i{i}th add; got 0b%B{toInt64 zs}.")
+        |> Option.defaultWith (fun _ -> printfn "All tested additions give correct answer!")
+
+    let swap o1 o2 (gates: IDictionary<string, Gate>) =
+        let copy = Dictionary gates
+        copy[o1] <- { gates[o2] with O = o1 }
+        copy[o2] <- { gates[o1] with O = o2 }
+
+        copy
+
+    /// Identifies places where the circuit deviates from a ripple carry adder.
+    /// See https://en.wikipedia.org/wiki/Adder_(electronics)#Ripple-carry_adder.
+    let analyse (gates: IDictionary<string, Gate>) = validation {
+
+        let placesList = places |> Array.toList
+        let xorGates = gates.Values |> Seq.filter (_.Kind >> (=) XOR) |> Seq.toArray
+        let andGates = gates.Values |> Seq.filter (_.Kind >> (=) AND) |> Seq.toArray
+        let orGates = gates.Values |> Seq.filter (_.Kind >> (=) OR) |> Seq.toArray
+
+        let hasInput i g = g.I1 = i || g.I2 = i
+        let hasInputs i1 i2 g = hasInput i1 g && hasInput i2 g
+
+        let optionToResult e o =
+            o |> Option.map Ok |> Option.defaultValue (Error e)
+
+        let! inputXors =
+            placesList
+            |> List.traverseResultA (fun i ->
+                xorGates
+                |> Array.tryFind (hasInputs $"x%02i{i}" $"y%02i{i}")
+                |> optionToResult $"xor_%02i{i} is missing")
+
+        let! inputAnds =
+            placesList
+            |> List.traverseResultA (fun i ->
+                andGates
+                |> Array.tryFind (hasInputs $"x%02i{i}" $"y%02i{i}")
+                |> optionToResult $"and_%02i{i} is missing")
+
+        // First bit is half-adder.
+        let! out0 =
+            let g = inputXors[0]
+
+            if g.O = "z00" then
+                Ok g
+            else
+                Error $"z00 is not output of x00 XOR y00"
+
+        and! outsPlus =
+            placesList
+            // First bit is half-adder.
+            |> List.skip 1
+            |> List.traverseResultA (fun i ->
+                xorGates
+                |> Array.tryFind (hasInput inputXors[i].O)
+                |> optionToResult $"out_%02i{i} is missing"
+                |> Result.bind (fun g ->
+                    if g.O = $"z%02i{i}" then
+                        Ok g
+                    else
+                        Error $"out_%02i{i} has output %s{g.O}"))
+
+        // First bit is half-adder.
+        and! carriesPlus =
+            placesList
+            // First bit is half-adder.
+            |> List.skip 1
+            |> List.traverseResultA (fun i ->
+                orGates
+                |> Array.tryFind (hasInput inputAnds[i].O)
+                |> optionToResult $"carry_%02i{i} is missing")
+
+        let _carries = inputAnds[0] :: carriesPlus
+        let _outs = out0 :: outsPlus
+
+        return ()
+    }
+
+    let solve (lines: string array) =
+        let gates = lines |> parse |> snd
+
+        // Swaps identified from running analyse without those swaps and inspecting flagged parts of puzzle input.
+        let swapped =
+            gates
+            |> swap "mkk" "z10"
+            |> swap "qbw" "z14"
+            |> swap "wcb" "z34"
+            |> swap "wjb" "cvp"
+
+        swapped |> analyse |> Result.defaultWith (List.iter (printfn "Error: %s"))
+        test swapped
+
+        let s =
+            [| "mkk"; "z10"; "qbw"; "z14"; "wcb"; "z34"; "wjb"; "cvp" |]
+            |> Array.sort
+            |> fun xs -> System.String.Join(',', xs)
+
+        printfn $"Day 24 part two answer is '%s{s}'"
+
+        -1
 
 module Test =
 
@@ -139,10 +272,6 @@ module Test =
 
             testList "PartOne" [
                 testCase "solve works with sample input" (fun _ -> test <@ PartOne.solve sampleInput = 2024 @>)
-            ]
-
-            testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
             ]
         ]
 
