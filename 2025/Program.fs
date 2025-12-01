@@ -2,6 +2,7 @@ open Expecto
 
 let dayFns day =
     match day with
+    | 01 -> Day01.dayFns
     | _ -> failwith $"Unrecognized day %i{day}"
 
 [<EntryPoint>]
