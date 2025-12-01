@@ -26,30 +26,15 @@ module PartOne =
 
 module PartTwo =
 
-    // TODO: refactor.
     let applyRotation (timesPastZero, currentPosition) rotation =
-        let additionalTimesPastZero =
-            let q, r = System.Math.DivRem(rotation, 100)
-
-            let wholeRotations =
-                match rotation with
-                | Positive -> q
-                | Zero -> failwith "broken assumption"
-                | Negative -> -q
-
-            let partialRotationsPastZero =
-                match r with
-                | Positive -> (currentPosition + r) / 100
-                | Zero -> 0
-                | Negative ->
-                    if currentPosition + r <= 0 && currentPosition > 0 then
-                        1
-                    else
-                        0
-
-            wholeRotations + partialRotationsPastZero
-
-        timesPastZero + additionalTimesPastZero, currentPosition + rotation |> modulo 100
+        match rotation with
+        | Positive ->
+            let q, r = System.Math.DivRem(currentPosition + rotation, 100)
+            timesPastZero + q, r
+        | Zero -> failwith "Should not be any zero rotations."
+        | Negative ->
+            let q, r = System.Math.DivRem((currentPosition - 100) % 100 + rotation, 100)
+            timesPastZero - q, (r + 100) % 100
 
     let solve (lines: string array) =
         lines
