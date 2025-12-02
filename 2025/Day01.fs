@@ -49,21 +49,36 @@ module Test =
     open Swensen.Unquote
 
     let all =
-        testList "DayN" [
-            let sampleInput = [| "L68"; "L30"; "R48"; "L5"; "R60"; "L55"; "L1"; "L99"; "R14"; "L82" |]
+        testList
+            "DayN"
+            [
+                let sampleInput =
+                    [|
+                        "L68"
+                        "L30"
+                        "R48"
+                        "L5"
+                        "R60"
+                        "L55"
+                        "L1"
+                        "L99"
+                        "R14"
+                        "L82"
+                    |]
 
-            testList "PartOne" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartOne.solve sampleInput = 3 @>)
+                testList
+                    "PartOne"
+                    [ testCase "solve works with sample input" (fun _ -> test <@ PartOne.solve sampleInput = 3 @>) ]
+
+                testList
+                    "PartTwo"
+                    [ testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 6 @>) ]
             ]
 
-            testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 6 @>)
-            ]
-        ]
-
-let dayFns = {
-    Tests = Test.all
-    UtilTests = []
-    PartOne = PartOne.solve >> int64
-    PartTwo = PartTwo.solve >> int64
-}
+let dayFns =
+    {
+        Tests = Test.all
+        UtilTests = []
+        PartOne = PartOne.solve >> int64
+        PartTwo = PartTwo.solve >> int64
+    }
