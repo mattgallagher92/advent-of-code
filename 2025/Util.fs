@@ -18,6 +18,6 @@ module Int32 =
 module Math =
     let integerPower base' exponent =
         if exponent < 0 then
-            invalidArg (nameof (exponent)) $"exponent must be at least 0; given %i{exponent}"
+            invalidArg (nameof exponent) $"exponent must be at least 0; given %i{exponent}"
         else
             Seq.replicate exponent base' |> Seq.fold (*) 1L
