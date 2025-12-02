@@ -17,12 +17,7 @@ let main args =
 
     let fns = dayFns day
 
-    testList
-        "All"
-        [
-            testList $"Day %i{day} util tests" fns.UtilTests
-            fns.Tests
-        ]
+    testList "All" [ testList $"Day %i{day} util tests" fns.UtilTests; fns.Tests ]
     |> runTestsWithCLIArgs [] rest
     |> ignore
 
