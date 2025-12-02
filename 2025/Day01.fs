@@ -50,7 +50,7 @@ module Test =
 
     let all =
         testList
-            "DayN"
+            "Day01"
             [
                 let sampleInput =
                     [|
