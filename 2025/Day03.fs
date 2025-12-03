@@ -4,17 +4,16 @@ module PartOne =
 
     let parseLine = Seq.map (_.ToString() >> int) >> Seq.toArray
 
-    let largestJoltage bank =
-        (bank, (0, None))
-        ||> Array.foldBack (fun battery (largestJoltageSoFar, largestBatterySoFar) ->
-            match largestBatterySoFar with
-            | None -> 0, Some battery
-            | Some lb ->
-                let j = battery * 10 + lb
+    let largestJoltage (bank: int array) =
+        let l = bank.Length
+        let rest, lastJoltage = bank[0 .. l - 3], 10 * bank[l - 2] + bank[l - 1]
 
-                let newJ = if j > largestJoltageSoFar then j else largestJoltageSoFar
-                let newB = if battery > lb then Some battery else largestBatterySoFar
-                newJ, newB)
+        (rest, (lastJoltage, max bank[l - 2] bank[l - 1]))
+        ||> Array.foldBack (fun battery (largestJ, largestB) ->
+            let j = battery * 10 + largestB
+            let newJ = if j > largestJ then j else largestJ
+            let newB = if battery > largestB then battery else largestB
+            newJ, newB)
         |> fst
 
     let solve (lines: string array) =
