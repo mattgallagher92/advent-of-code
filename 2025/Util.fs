@@ -30,7 +30,7 @@ module Array =
 [<RequireQualifiedAccess>]
 module Grid =
 
-    type GridDetails<'a> = private {
+    type GridDetails<'a> = {
         Items: 'a array array
         Width: int
         Height: int
@@ -38,10 +38,9 @@ module Grid =
 
     /// A 2D-grid of fixed height and width, indexed by row and column.
     type Grid<'a> =
-        private
         | Grid of GridDetails<'a>
 
-        member private this.Details =
+        member this.Details =
             let (Grid gd) = this
             gd
 
@@ -102,8 +101,21 @@ module Grid =
         items |> tryCreate |> Result.defaultWith failwith
 
     let indexed (grid: Grid<'a>) =
+        grid.Details.Items
+        |> Array.mapi (fun r row -> row |> Array.mapi (fun c x -> (r, c), x))
+        |> Array.collect id
+
+    /// row -> col -> val -> newVal
+    let mapi (f: int -> int -> 'a -> 'b) (grid: Grid<'a>) =
         let (Grid details) = grid
 
         details.Items
-        |> Array.mapi (fun r row -> row |> Array.mapi (fun c x -> (r, c), x))
-        |> Array.collect id
+        |> Array.mapi (fun r row -> row |> Array.mapi (fun c x -> f r c x))
+        |> create
+
+    /// row -> col -> val -> unit
+    let iteri (f: int -> int -> 'a -> unit) (grid: Grid<'a>) =
+        let (Grid details) = grid
+
+        details.Items
+        |> Array.iteri (fun r row -> row |> Array.iteri (fun c x -> f r c x))
