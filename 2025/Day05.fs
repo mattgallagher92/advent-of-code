@@ -1,52 +1,53 @@
 module Day05
 
+type InclusiveRange = {
+    Lower: int64
+    Upper: int64
+} with
+
+    member this.Contains x = this.Lower <= x && x <= this.Upper
+    member this.Size = this.Upper - this.Lower + 1L
+
+module InclusiveRange =
+
+    /// Minimum set of non-overlapping ranges that is equivalent to the given ranges.
+    let combine (ranges: InclusiveRange array) =
+        let orderedRanges = ranges |> Array.sortBy _.Lower
+
+        ([| orderedRanges[0] |], orderedRanges)
+        ||> Array.fold (fun combined nextRange ->
+            // Because of ordering, earlier ranges cannot overlap.
+            let last = combined |> Array.last
+            let nextRange = nextRange
+            let lowerContained = last.Contains nextRange.Lower
+            let upperContained = last.Contains nextRange.Upper
+
+            match lowerContained, upperContained with
+            | false, false -> [| yield! combined; nextRange |]
+            | false, true -> failwith "Ordering prohbits upper containment without lower containment."
+            | true, false -> [|
+                yield! combined[.. combined.Length - 2]
+                { last with Upper = nextRange.Upper }
+              |]
+            | true, true -> combined)
+
+let parse (lines: string array) =
+    let emptyIx = lines |> Array.findIndex ((=) "")
+
+    let ranges =
+        lines[.. emptyIx - 1]
+        |> Array.map (fun s ->
+            s.Split('-')
+            |> fun parts -> {
+                Lower = int64 parts[0]
+                Upper = int64 parts[1]
+            })
+
+    let available = lines[emptyIx + 1 ..] |> Array.map int64
+
+    ranges, available
+
 module PartOne =
-
-    type InclusiveRange = {
-        Lower: int64
-        Upper: int64
-    } with
-
-        member this.Contains x = this.Lower <= x && x <= this.Upper
-
-    module InclusiveRange =
-
-        /// Minimum set of non-overlapping ranges that is equivalent to the given ranges.
-        let combine (ranges: InclusiveRange array) =
-            let orderedRanges = ranges |> Array.sortBy _.Lower
-
-            ([| orderedRanges[0] |], orderedRanges)
-            ||> Array.fold (fun combined nextRange ->
-                // Because of ordering, earlier ranges cannot overlap.
-                let last = combined |> Array.last
-                let nextRange = nextRange
-                let lowerContained = last.Contains nextRange.Lower
-                let upperContained = last.Contains nextRange.Upper
-
-                match lowerContained, upperContained with
-                | false, false -> [| yield! combined; nextRange |]
-                | false, true -> failwith "Ordering prohbits upper containment without lower containment."
-                | true, false -> [|
-                    yield! combined[.. combined.Length - 2]
-                    { last with Upper = nextRange.Upper }
-                  |]
-                | true, true -> combined)
-
-    let parse (lines: string array) =
-        let emptyIx = lines |> Array.findIndex ((=) "")
-
-        let ranges =
-            lines[.. emptyIx - 1]
-            |> Array.map (fun s ->
-                s.Split('-')
-                |> fun parts -> {
-                    Lower = int64 parts[0]
-                    Upper = int64 parts[1]
-                })
-
-        let available = lines[emptyIx + 1 ..] |> Array.map int64
-
-        ranges, available
 
     let solve (lines: string array) =
         let ranges, availabe = parse lines
@@ -62,7 +63,11 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    let solve (lines: string array) =
+        let ranges, _ = parse lines
+        let combinedRanges = InclusiveRange.combine ranges
+
+        combinedRanges |> Array.sumBy _.Size
 
 module Test =
 
@@ -78,7 +83,7 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 14 @>)
             ]
         ]
 
