@@ -23,7 +23,29 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    let solve (lines: string array) =
+        let transposed = lines |> Array.map Seq.toArray |> Array.transpose
+        let initialState = true, (fun _ _ -> failwith "should not be called"), 0L, 0L
+
+        (initialState, transposed)
+        ||> Array.fold (fun (isNewProblem, currentOperation, currentProblemAcc, sumOfPreviousAnswers) l ->
+            let op, acc =
+                if isNewProblem then
+                    l
+                    |> Array.last
+                    |> function
+                        | '+' -> (fun a b -> a + b + 0L), 0L
+                        | '*' -> (fun a b -> a * b * 1L), 1L
+                        | c -> failwith $"Invalid operation string %c{c}"
+                else
+                    currentOperation, currentProblemAcc
+
+            if l |> Array.forall ((=) ' ') then
+                true, op, acc, sumOfPreviousAnswers + currentProblemAcc
+            else
+                let n = l[.. l.Length - 2] |> fun chars -> System.String chars |> _.Trim() |> int64
+                false, op, op acc n, sumOfPreviousAnswers)
+        |> fun (_, _, acc, sum) -> acc + sum
 
 module Test =
 
@@ -39,7 +61,7 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 3263827L @>)
             ]
         ]
 
@@ -47,5 +69,6 @@ let dayFns = {
     Tests = Test.all
     UtilTests = []
     PartOne = PartOne.solve >> int64
+    // NOTE: be careful that editor doesn't trim line endings.
     PartTwo = PartTwo.solve >> int64
 }
