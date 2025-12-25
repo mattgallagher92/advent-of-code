@@ -38,7 +38,31 @@ module PartOne =
 
 module PartTwo =
 
-    let solve (lines: string array) = -1
+    let numWorldsOut (numWorldsIn: int64 array) (line: string) = [|
+        for i in 0 .. numWorldsIn.Length - 1 do
+            match line[i] with
+            | 'S' -> 1L
+            | '.' ->
+                let leftWorlds =
+                    (numWorldsIn |> Seq.tryItem (i - 1), line |> Seq.tryItem (i - 1))
+                    ||> Option.map2 (fun n c -> if c = '^' then n else 0L)
+                    |> Option.defaultValue 0L
+
+                let rightWorlds =
+                    (numWorldsIn |> Seq.tryItem (i + 1), line |> Seq.tryItem (i + 1))
+                    ||> Option.map2 (fun n c -> if c = '^' then n else 0L)
+                    |> Option.defaultValue 0L
+
+                leftWorlds + numWorldsIn[i] + rightWorlds
+            // Assumes that there aren't two splitters next to each other, which is true for sample and my input.
+            | '^' -> 0L
+            | _ -> failwith "Bug"
+    |]
+
+    let solve (lines: string array) =
+        (lines[0] |> Seq.map (fun _ -> 0L) |> Seq.toArray, lines)
+        ||> Array.fold numWorldsOut
+        |> Array.sum
 
 module Test =
 
@@ -71,7 +95,7 @@ module Test =
             ]
 
             testList "PartTwo" [
-                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = -1 @>)
+                testCase "solve works with sample input" (fun _ -> test <@ PartTwo.solve sampleInput = 40 @>)
             ]
         ]
 
